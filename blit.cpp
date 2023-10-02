@@ -8,15 +8,16 @@
 int main(int argc, char* argv[]) {
   int workgroupSize = 32;
   int numWorkgroups = 32;
+  int c;
 
     while ((c = getopt (argc, argv, "t:w:")) != -1)
     switch (c)
       {
       case 't':
-        workgroupSize = optarg;
+        workgroupSize = atoi(optarg);
         break;
       case 'w':
-        numWorkgroups = optarg;
+        numWorkgroups = atoi(optarg);
         break;
       case '?':
         if (optopt == 't' || optopt == 'w')
@@ -49,7 +50,9 @@ int main(int argc, char* argv[]) {
 	out.clear();
 	std::vector<easyvk::Buffer> bufs = {in, out};
 
-	std::vector<uint32_t> spvCode = #include "build/blit.cinit";	
+	std::vector<uint32_t> spvCode = 
+	#include "build/blit.cinit"
+	;
 	auto program = easyvk::Program(device, spvCode, bufs);
 
 	program.setWorkgroups(size);
@@ -60,15 +63,14 @@ int main(int argc, char* argv[]) {
 
 	float time = program.runWithDispatchTiming();
 
-  std::cout << "Time" << time << "\n";
-
 	// Check the output.
 	for (int i = 0; i < size; i++) {
 		// std::cout << "c[" << i << "]: " << c.load(i) << "\n";
 		assert(out.load<uint>(i) == in.load<uint>(i));
 	}
 
-  std::cout << "Throughput: " << ((size * 4 * 2)/time) << " GBPS\n";
+	// time is returned in ns, so don't need to divide by bytes to get GBPS
+	std::cout << "Throughput: " << (size * 4 * 2)/(time) << " GBPS\n";
 
 	// Cleanup.
 	program.teardown();

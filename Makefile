@@ -15,11 +15,8 @@ clean:
 easyvk: easyvk/src/easyvk.cpp easyvk/src/easyvk.h
 	$(CXX) $(CXXFLAGS) -Ieasyvk/src -c easyvk/src/easyvk.cpp -o build/easyvk.o
 
-blit: vect-add.spv vect-add.cinit vect-add.cpp
-	$(CXX) $(CXXFLAGS) -Ieasyvk/src build/easyvk.o vect-add.cpp -lvulkan -o build/vect-add.run
-
-%.spv: %.cl
-	clspv -cl-std=CL2.0 -inline-entry-points $< -o build/$@
+blit: blit.cinit blit.cpp
+	$(CXX) $(CXXFLAGS) -Ieasyvk/src build/easyvk.o blit.cpp -lvulkan -o build/blit.run
 
 %.cinit: %.cl
 	clspv -cl-std=CL2.0 -inline-entry-points -output-format=c $< -o build/$@
