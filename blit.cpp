@@ -8,9 +8,10 @@
 int main(int argc, char* argv[]) {
   int workgroupSize = 32;
   int numWorkgroups = 32;
+  bool enableValidationLayers = false;
   int c;
 
-    while ((c = getopt (argc, argv, "t:w:")) != -1)
+    while ((c = getopt (argc, argv, "vt:w:")) != -1)
     switch (c)
       {
       case 't':
@@ -19,6 +20,9 @@ int main(int argc, char* argv[]) {
       case 'w':
         numWorkgroups = atoi(optarg);
         break;
+      case 'v':
+	enableValidationLayers = true;
+	break;
       case '?':
         if (optopt == 't' || optopt == 'w')
           std::cerr << "Option -" << optopt << "requires an argument\n";
@@ -30,7 +34,7 @@ int main(int argc, char* argv[]) {
       }
   auto size = numWorkgroups * workgroupSize;
 	// Initialize instance.
-	auto instance = easyvk::Instance(false);
+	auto instance = easyvk::Instance(enableValidationLayers);
 	// Get list of available physical devices.
 	auto physicalDevices = instance.physicalDevices();
 	// Create device from first physical device.
@@ -55,8 +59,8 @@ int main(int argc, char* argv[]) {
 	;
 	auto program = easyvk::Program(device, spvCode, bufs);
 
-	program.setWorkgroups(size);
-	program.setWorkgroupSize(32);
+	program.setWorkgroups(numWorkgroups);
+	program.setWorkgroupSize(workgroupSize);
 
 	// Run the kernel.
 	program.initialize("blit");
