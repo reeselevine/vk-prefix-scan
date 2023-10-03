@@ -1,7 +1,5 @@
 #define BATCH_SIZE 8
-#define BLOCK_SIZE 128
 
-#define FLG_X 0
 #define FLG_A 1
 #define FLG_P 2
 
@@ -49,7 +47,7 @@ __kernel void prefix_sum(
       scratch[i] += scratch[i - 1];
     }
     uint partial_sum = scratch[start + rake_batch_size - 1];
-    uint prefix = sub_group_scan_exclusive_sum(partial_sum);
+    uint prefix = sub_group_scan_exclusive_add(partial_sum);
     for (uint i = start; i < start + rake_batch_size; i++) {
       scratch[i] += prefix;
     }
@@ -65,7 +63,7 @@ __kernel void prefix_sum(
       flag = FLG_P;
     }
     prefix_states[part_id].agg = scratch[get_local_id(0)];
-    atomic_store_explicit(prefix_states[part_id].flag, flag, memory_order_release);
+    atomic_store_explicit(&prefix_states[part_id].flag, flag, memory_order_release);
 
     // might as well initialize exclusive prefix here too
     exclusive_prefix = 0;
@@ -75,10 +73,10 @@ __kernel void prefix_sum(
   if (part_id != 0 && get_local_id(0) == get_local_size(0) - 1) {
     uint lookback_id = part_id - 1;
     // spin until inclusive prefix is set
-    while (atomic_load_explicit(prefix_states[lookback_id].flag, memory_order_acquire) != FLG_P);
+    while (atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire) != FLG_P);
     exclusive_prefix = prefix_states[lookback_id].agg;
     prefix_states[part_id].agg = exclusive_prefix + scratch[get_local_id(0)];
-    atomic_store_explicit(prefix_states[part_id].flag, FLG_P, memory_order_release);
+    atomic_store_explicit(&prefix_states[part_id].flag, FLG_P, memory_order_release);
   }
 
   // ensure all threads in the block see exclusive_prefix  
