@@ -8,7 +8,7 @@ typedef struct PrefixState {
   atomic_uint flag;
 } PrefixState;
 
-__kernel void prefix_sum(
+__kernel void prefix_scan(
   __global uint *in, 
   __global uint *out,
   __local uint *scratch,

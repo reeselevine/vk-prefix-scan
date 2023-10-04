@@ -5,6 +5,13 @@
 #include <vector>
 #include <unistd.h>
 
+void computeReferencePrefixSum(uint32_t* ref, int size) {
+  ref[0] = 0;
+  for (int i = 1; i < size; i++) {
+    ref[i] = ref[i - 1] + i;
+  }
+}
+
 int main(int argc, char* argv[]) {
   int workgroupSize = 32;
   int numWorkgroups = 32;
@@ -44,8 +51,8 @@ int main(int argc, char* argv[]) {
 	// Define the buffers to use in the kernel. 
 	auto in = easyvk::Buffer(device, size, sizeof(uint32_t));
 	auto out = easyvk::Buffer(device, size, sizeof(uint32_t));
-  //TODO: need to figure out how to allocate workgroup storage class memory here
-
+	auto prefixStates = easyvk::Buffer(device, numWorkgroups, 2*sizeof(uint32_t));
+	auto partitionCtr = eayvk::Buffer(device, 1, sizeof(uint32_t));
 
 	// Write initial values to the buffers.
 	for (int i = 0; i < size; i++) {
@@ -54,25 +61,29 @@ int main(int argc, char* argv[]) {
 		in.store<uint32_t>(i, i);
 	}
 	out.clear();
-	std::vector<easyvk::Buffer> bufs = {in, out};
+	prefixStates.clear();
+	partitionCtr.clear();
+	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr};
 
 	std::vector<uint32_t> spvCode = 
-	#include "build/blit.cinit"
+	#include "build/prefix-scan.cinit"
 	;
 	auto program = easyvk::Program(device, spvCode, bufs);
 
 	program.setWorkgroups(numWorkgroups);
 	program.setWorkgroupSize(workgroupSize);
+	program.setWorkgroupMemoryLength(numWorkgroups*sizeof(uint32_t), 0);
 
 	// Run the kernel.
-	program.initialize("blit");
+	program.initialize("prefix_scan");
 
 	float time = program.runWithDispatchTiming();
 
 	// Check the output.
+	uint32_t ref[size];
+	computeReferencePrefixSum(ref, size);
 	for (int i = 0; i < size; i++) {
-		// std::cout << "c[" << i << "]: " << c.load(i) << "\n";
-		assert(out.load<uint>(i) == in.load<uint>(i));
+		assert(out.load<uint>(i) == ref[i]);
 	}
 
 	// time is returned in ns, so don't need to divide by bytes to get GBPS
@@ -82,6 +93,8 @@ int main(int argc, char* argv[]) {
 	program.teardown();
 	in.teardown();
 	out.teardown();
+	prefixStates.teardown();
+	partitionCtr.teardown();
 	device.teardown();
 	instance.teardown();
 	return 0;

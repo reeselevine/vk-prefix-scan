@@ -19,7 +19,7 @@ blit: blit.cinit blit.cpp
 	$(CXX) $(CXXFLAGS) -Ieasyvk/src build/easyvk.o blit.cpp -lvulkan -o build/blit.run
 
 %.spv: %.cl
-	clspv -w -cl-std=CL2.0 -inline-entry-points $< -o $@
+	clspv -w -cl-std=CL2.0 -inline-entry-points $< -o build/$@
 
 %.cinit: %.cl
 	clspv -w -cl-std=CL2.0 -inline-entry-points -output-format=c $< -o build/$@
