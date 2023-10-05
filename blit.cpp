@@ -7,13 +7,14 @@
 
 int main(int argc, char *argv[])
 {
-  int workgroupSize = 32;
+  int workgroupSize = 64;
   int numWorkgroups = 32;
+  int deviceID = 0;
   bool enableValidationLayers = false;
   bool checkResults = false;
   int c;
 
-  while ((c = getopt(argc, argv, "vct:w:")) != -1)
+  while ((c = getopt(argc, argv, "vct:w:d:")) != -1)
     switch (c)
     {
     case 't':
@@ -27,6 +28,9 @@ int main(int argc, char *argv[])
       break;
     case 'c':
       checkResults = true;
+      break;
+    case 'd':
+      deviceID = atoi(optarg);
       break;
     case '?':
       if (optopt == 't' || optopt == 'w')
@@ -43,7 +47,7 @@ int main(int argc, char *argv[])
   // Get list of available physical devices.
   auto physicalDevices = instance.physicalDevices();
   // Create device from first physical device.
-  auto device = easyvk::Device(instance, physicalDevices.at(0));
+  auto device = easyvk::Device(instance, physicalDevices.at(deviceID));
   std::cout << "Using device: " << device.properties.deviceName << "\n";
   std::cout << "Device subgroup size: " << device.subgroupSize() << "\n";
 

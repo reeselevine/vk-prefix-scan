@@ -17,11 +17,12 @@ void computeReferencePrefixSum(uint32_t* ref, int size) {
 int main(int argc, char* argv[]) {
   int workgroupSize = 64;
   int numWorkgroups = 32;
+  int deviceID = 0;
   bool enableValidationLayers = false;
   bool checkResults = false;
   int c;
 
-    while ((c = getopt (argc, argv, "vct:w:")) != -1)
+    while ((c = getopt (argc, argv, "vct:w:d:")) != -1)
     switch (c)
       {
       case 't':
@@ -35,6 +36,9 @@ int main(int argc, char* argv[]) {
 	break;
       case 'c':
 	checkResults = true;
+	break;
+      case 'd':
+	deviceID = atoi(optarg);
 	break;
       case '?':
         if (optopt == 't' || optopt == 'w')
@@ -51,7 +55,7 @@ int main(int argc, char* argv[]) {
 	// Get list of available physical devices.
 	auto physicalDevices = instance.physicalDevices();
 	// Create device from first physical device.
-	auto device = easyvk::Device(instance, physicalDevices.at(0));
+	auto device = easyvk::Device(instance, physicalDevices.at(deviceID));
 	std::cout << "Using device: " << device.properties.deviceName << "\n";
   std::cout << "Device subgroup size: " << device.subgroupSize() << "\n";
 	// Define the buffers to use in the kernel. 
@@ -87,16 +91,17 @@ int main(int argc, char* argv[]) {
 
 	// Check the output.
 	if (checkResults) {
-		uint32_t ref[size];
-		computeReferencePrefixSum(ref, size);
+		uint32_t ref = 0;
 		for (int i = 0; i < size; i++) {
-			//std::cout << "out[" << i << "]: " << out.load<uint>(i) << ", ref[" << i << "]: " << ref[i] << "\n";
-			assert(out.load<uint>(i) == ref[i]);
+			ref += i;
+			//std::cout << "out[" << i << "]: " << out.load<uint>(i) << ", ref:" << ref << "\n";
+			assert(out.load<uint>(i) == ref);
 		}
 	}
 
 	// time is returned in ns, so don't need to divide by bytes to get GBPS
-	std::cout << "Throughput: " << (size * 4 * 2)/(time) << " GBPS\n";
+        std::cout << "GPU Time: " << time / 1000000 << " ms\n";
+	std::cout << "Throughput: " << (((long) size) * 4 * 2)/(time) << " GBPS\n";
 
 	// Cleanup.
 	program.teardown();
