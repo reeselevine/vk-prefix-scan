@@ -5,6 +5,8 @@
 #include <vector>
 #include <unistd.h>
 
+#define BATCH_SIZE 8
+
 void computeReferencePrefixSum(uint32_t* ref, int size) {
   ref[0] = 0;
   for (int i = 1; i < size; i++) {
@@ -13,12 +15,13 @@ void computeReferencePrefixSum(uint32_t* ref, int size) {
 }
 
 int main(int argc, char* argv[]) {
-  int workgroupSize = 32;
+  int workgroupSize = 64;
   int numWorkgroups = 32;
   bool enableValidationLayers = false;
+  bool checkResults = false;
   int c;
 
-    while ((c = getopt (argc, argv, "vt:w:")) != -1)
+    while ((c = getopt (argc, argv, "vct:w:")) != -1)
     switch (c)
       {
       case 't':
@@ -30,6 +33,9 @@ int main(int argc, char* argv[]) {
       case 'v':
 	enableValidationLayers = true;
 	break;
+      case 'c':
+	checkResults = true;
+	break;
       case '?':
         if (optopt == 't' || optopt == 'w')
           std::cerr << "Option -" << optopt << "requires an argument\n";
@@ -39,7 +45,7 @@ int main(int argc, char* argv[]) {
       default:
         abort ();
       }
-  auto size = numWorkgroups * workgroupSize;
+  auto size = numWorkgroups * workgroupSize * BATCH_SIZE;
 	// Initialize instance.
 	auto instance = easyvk::Instance(enableValidationLayers);
 	// Get list of available physical devices.
@@ -52,7 +58,7 @@ int main(int argc, char* argv[]) {
 	auto in = easyvk::Buffer(device, size, sizeof(uint32_t));
 	auto out = easyvk::Buffer(device, size, sizeof(uint32_t));
 	auto prefixStates = easyvk::Buffer(device, numWorkgroups, 2*sizeof(uint32_t));
-	auto partitionCtr = eayvk::Buffer(device, 1, sizeof(uint32_t));
+	auto partitionCtr = easyvk::Buffer(device, 1, sizeof(uint32_t));
 
 	// Write initial values to the buffers.
 	for (int i = 0; i < size; i++) {
@@ -72,7 +78,7 @@ int main(int argc, char* argv[]) {
 
 	program.setWorkgroups(numWorkgroups);
 	program.setWorkgroupSize(workgroupSize);
-	program.setWorkgroupMemoryLength(numWorkgroups*sizeof(uint32_t), 0);
+	program.setWorkgroupMemoryLength(workgroupSize*sizeof(uint32_t), 0);
 
 	// Run the kernel.
 	program.initialize("prefix_scan");
@@ -80,10 +86,13 @@ int main(int argc, char* argv[]) {
 	float time = program.runWithDispatchTiming();
 
 	// Check the output.
-	uint32_t ref[size];
-	computeReferencePrefixSum(ref, size);
-	for (int i = 0; i < size; i++) {
-		assert(out.load<uint>(i) == ref[i]);
+	if (checkResults) {
+		uint32_t ref[size];
+		computeReferencePrefixSum(ref, size);
+		for (int i = 0; i < size; i++) {
+			//std::cout << "out[" << i << "]: " << out.load<uint>(i) << ", ref[" << i << "]: " << ref[i] << "\n";
+			assert(out.load<uint>(i) == ref[i]);
+		}
 	}
 
 	// time is returned in ns, so don't need to divide by bytes to get GBPS

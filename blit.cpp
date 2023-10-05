@@ -9,9 +9,10 @@ int main(int argc, char* argv[]) {
   int workgroupSize = 32;
   int numWorkgroups = 32;
   bool enableValidationLayers = false;
+  bool checkResults = false;
   int c;
 
-    while ((c = getopt (argc, argv, "vt:w:")) != -1)
+    while ((c = getopt (argc, argv, "vct:w:")) != -1)
     switch (c)
       {
       case 't':
@@ -22,6 +23,9 @@ int main(int argc, char* argv[]) {
         break;
       case 'v':
 	enableValidationLayers = true;
+	break;
+      case 'c':
+	checkResults = true;
 	break;
       case '?':
         if (optopt == 't' || optopt == 'w')
@@ -40,6 +44,7 @@ int main(int argc, char* argv[]) {
 	// Create device from first physical device.
 	auto device = easyvk::Device(instance, physicalDevices.at(0));
 	std::cout << "Using device: " << device.properties.deviceName << "\n";
+  std::cout << "Device subgroup size: " << device.subgroupSize() << "\n";
 
 	// Define the buffers to use in the kernel. 
 	auto in = easyvk::Buffer(device, size, sizeof(uint32_t));
@@ -68,9 +73,11 @@ int main(int argc, char* argv[]) {
 	float time = program.runWithDispatchTiming();
 
 	// Check the output.
-	for (int i = 0; i < size; i++) {
-		// std::cout << "c[" << i << "]: " << c.load(i) << "\n";
-		assert(out.load<uint>(i) == in.load<uint>(i));
+	if (checkResults) {
+		for (int i = 0; i < size; i++) {
+			// std::cout << "c[" << i << "]: " << c.load(i) << "\n";
+			assert(out.load<uint>(i) == in.load<uint>(i));
+		}
 	}
 
 	// time is returned in ns, so don't need to divide by bytes to get GBPS

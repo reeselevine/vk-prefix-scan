@@ -42,7 +42,7 @@ __kernel void prefix_scan(
   if (get_sub_group_id() == 0) {
     // each thread rakes across a block of the local prefixes
     uint rake_batch_size = get_local_size(0)/get_sub_group_size();
-    uint start = get_sub_group_local_id() * rake_batch_size;
+    uint start = get_local_id(0) * rake_batch_size;
     for (uint i = start + 1; i < start + rake_batch_size; i++) {
       scratch[i] += scratch[i - 1];
     }
@@ -55,27 +55,27 @@ __kernel void prefix_scan(
 
   __local uint exclusive_prefix;
 
-  // last thread in each block updates the aggregate/flag
-  if (get_local_id(0) == get_local_size(0) - 1) {
+  // one thread in each block updates the aggregate/flag (use first flag to avoid extra workgroup barrier)
+  if (get_local_id(0) == 0) {
     uint flag = FLG_A;
     // first block does not need to look back
     if (part_id == 0) {
       flag = FLG_P;
     }
-    prefix_states[part_id].agg = scratch[get_local_id(0)];
+    prefix_states[part_id].agg = scratch[get_local_size(0) - 1];
     atomic_store_explicit(&prefix_states[part_id].flag, flag, memory_order_release);
 
     // might as well initialize exclusive prefix here too
     exclusive_prefix = 0;
   }
   
-  // lookback phase, for now no decoupled to test above code
-  if (part_id != 0 && get_local_id(0) == get_local_size(0) - 1) {
+  // lookback phase, for now not decoupled to test above code
+  if (part_id != 0 && get_local_id(0) == 0) {
     uint lookback_id = part_id - 1;
     // spin until inclusive prefix is set
     while (atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire) != FLG_P);
     exclusive_prefix = prefix_states[lookback_id].agg;
-    prefix_states[part_id].agg = exclusive_prefix + scratch[get_local_id(0)];
+    prefix_states[part_id].agg = exclusive_prefix + scratch[get_local_size(0) - 1];
     atomic_store_explicit(&prefix_states[part_id].flag, FLG_P, memory_order_release);
   }
 
