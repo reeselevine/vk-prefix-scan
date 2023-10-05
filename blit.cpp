@@ -75,13 +75,15 @@ int main(int argc, char* argv[]) {
 	// Check the output.
 	if (checkResults) {
 		for (int i = 0; i < size; i++) {
-			// std::cout << "c[" << i << "]: " << c.load(i) << "\n";
+//			std::cout << "in[" << i << "]: " << in.load<uint>(i) << "\n";
+//			std::cout << "out[" << i << "]: " << out.load<uint>(i) << "\n";
 			assert(out.load<uint>(i) == in.load<uint>(i));
 		}
 	}
 
 	// time is returned in ns, so don't need to divide by bytes to get GBPS
-	std::cout << "Throughput: " << (size * 4 * 2)/(time) << " GBPS\n";
+	std::cout << "GPU Time: " << time/1000000 << " ms\n";
+	std::cout << "Throughput: " << (((long) size) * 4 * 2)/(time) << " GBPS\n";
 
 	// Cleanup.
 	program.teardown();
