@@ -55,7 +55,7 @@ __kernel void prefix_scan(
 
   __local uint exclusive_prefix;
 
-  // one thread in each block updates the aggregate/flag (use first flag to avoid extra workgroup barrier)
+  // one thread in each block updates the aggregate/flag (use first thread to avoid extra workgroup barrier)
   if (get_local_id(0) == 0) {
     uint flag = FLG_A;
     // first block does not need to look back
