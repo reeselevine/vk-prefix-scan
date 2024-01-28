@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
 	// Define the buffers to use in the kernel. 
 	auto in = easyvk::Buffer(device, size, sizeof(uint32_t));
 	auto out = easyvk::Buffer(device, size, sizeof(uint32_t));
-	auto prefixStates = easyvk::Buffer(device, numWorkgroups, 2*sizeof(uint32_t));
+	auto prefixStates = easyvk::Buffer(device, numWorkgroups, 3*sizeof(uint32_t));
 	auto partitionCtr = easyvk::Buffer(device, 1, sizeof(uint32_t));
 
 	// Write initial values to the buffers.

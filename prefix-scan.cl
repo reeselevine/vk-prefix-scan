@@ -5,6 +5,7 @@
 
 typedef struct PrefixState {
   uint agg;
+  uint inclusive_prefix;
   atomic_uint flag;
 } PrefixState;
 
@@ -58,33 +59,34 @@ __kernel void prefix_scan(
   // one thread in each block updates the aggregate/flag (use first thread to avoid extra workgroup barrier)
   if (get_local_id(0) == 0) {
     uint flag = FLG_A;
+    prefix_states[part_id].agg = scratch[get_local_size(0) - 1];
     // first block does not need to look back
     if (part_id == 0) {
       flag = FLG_P;
+      prefix_states[part_id].inclusive_prefix = scratch[get_local_size(0) - 1];
     }
-    prefix_states[part_id].agg = scratch[get_local_size(0) - 1];
     atomic_store_explicit(&prefix_states[part_id].flag, flag, memory_order_release);
 
     // might as well initialize exclusive prefix here too
     exclusive_prefix = 0;
   }
   
-  // lookback phase, for now not decoupled to test above code
+  // lookback phase
   if (part_id != 0 && get_local_id(0) == 0) {
     uint lookback_id = part_id - 1;
     bool done = false;
-    // spin until inclusive prefix is set
+    // spin and lookback until full prefix is set
     while (!done) {
       uint flag = atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire);
       if (flag == FLG_P) {
-        exclusive_prefix += prefix_states[lookback_id].agg; 
+        exclusive_prefix += prefix_states[lookback_id].inclusive_prefix; 
         done = true;
       } else if (flag == FLG_A) {
         exclusive_prefix += prefix_states[lookback_id].agg;
         lookback_id -= 1;
       }
     }
-    prefix_states[part_id].agg = exclusive_prefix + scratch[get_local_size(0) - 1];
+    prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
     atomic_store_explicit(&prefix_states[part_id].flag, FLG_P, memory_order_release);
   }
 
@@ -95,7 +97,7 @@ __kernel void prefix_scan(
   // scratch contains an inclusive prefix per thread, so the exclusive prefix is grabbed from 
   // the previous thread's scratch location
   if (get_local_id(0) != 0) {
-    total_exclusive_prefix += scratch[get_local_id(0)- 1];
+    total_exclusive_prefix += scratch[get_local_id(0) - 1];
   }
 
   // store final prefix back to memory
