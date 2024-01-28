@@ -72,9 +72,18 @@ __kernel void prefix_scan(
   // lookback phase, for now not decoupled to test above code
   if (part_id != 0 && get_local_id(0) == 0) {
     uint lookback_id = part_id - 1;
+    bool done = false;
     // spin until inclusive prefix is set
-    while (atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire) != FLG_P);
-    exclusive_prefix = prefix_states[lookback_id].agg;
+    while (!done) {
+      uint flag = atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire);
+      if (flag == FLG_P) {
+        exclusive_prefix += prefix_states[lookback_id].agg; 
+        done = true;
+      } else if (flag == FLG_A) {
+        exclusive_prefix += prefix_states[lookback_id].agg;
+        lookback_id -= 1;
+      }
+    }
     prefix_states[part_id].agg = exclusive_prefix + scratch[get_local_size(0) - 1];
     atomic_store_explicit(&prefix_states[part_id].flag, FLG_P, memory_order_release);
   }
