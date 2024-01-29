@@ -9,6 +9,14 @@ typedef struct PrefixState {
   atomic_uint flag;
 } PrefixState;
 
+uint calc_lookback_id(uint part_id, uint lookback_amt) {
+  if (lookback_amt > part_id) {
+    return 0;
+  } else {
+    return part_id - lookback_amt;
+  }
+}
+
 __kernel void prefix_scan(
   __global uint *in, 
   __global uint *out,
@@ -75,7 +83,7 @@ __kernel void prefix_scan(
   if (part_id != 0 && get_sub_group_id() == 0) {
     // ensure all threads in the subgroup see exclusive_prefix initialized
     sub_group_barrier(CLK_LOCAL_MEM_FENCE);
-    uint lookback_id = max(part_id - get_sub_group_local_id() - 1, 0);
+    uint lookback_id = calc_lookback_id(part_id, get_sub_group_size() - get_sub_group_local_id());
     bool done = false;
     // spin and lookback until full prefix is set
     while (!done) {
@@ -101,7 +109,7 @@ __kernel void prefix_scan(
         // if no thread has inclusive prefix, all threads load exclusive prefix
         } else {
           // every thread looks back another partition
-          lookback_id = max(lookback_id - get_sub_group_size(), 0);
+	  lookback_id = calc_lookback_id(lookback_id, get_sub_group_size());
           local_prefix = prefix_states[lookback_id].agg;
         }
         uint scanned_prefix = sub_group_scan_inclusive_add(local_prefix);
