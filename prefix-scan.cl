@@ -71,23 +71,51 @@ __kernel void prefix_scan(
     exclusive_prefix = 0;
   }
   
-  // lookback phase
-  if (part_id != 0 && get_local_id(0) == 0) {
-    uint lookback_id = part_id - 1;
+  // lookback phase (parallelized), all threads in first subgroup participate
+  if (part_id != 0 && get_sub_group_id() == 0) {
+    // ensure all threads in the subgroup see exclusive_prefix initialized
+    sub_group_barrier(CLK_LOCAL_MEM_FENCE);
+    uint lookback_id = max(part_id - get_sub_group_local_id() - 1, 0);
     bool done = false;
     // spin and lookback until full prefix is set
     while (!done) {
       uint flag = atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire);
-      if (flag == FLG_P) {
-        exclusive_prefix += prefix_states[lookback_id].inclusive_prefix; 
-        done = true;
-      } else if (flag == FLG_A) {
-        exclusive_prefix += prefix_states[lookback_id].agg;
-        lookback_id -= 1;
+      // check if all threads see a valid prefix
+      if (sub_group_all(flag)) {
+        uint local_prefix = 0;
+        // check if any thread has an inclusive prefix
+        if (sub_group_any(flag == FLG_P)) {
+          // we will terminate after this iteration
+          done = true;
+          // we want to find the highest thread with an inclusive prefix
+          uint inclusive = flag == FLG_P ? get_sub_group_local_id() : 0;
+          // now all threads in the subgroup will know the highest thread with inclusive prefix
+          uint max_inclusive = sub_group_reduce_max(inclusive);
+          // highest thread with inclusive prefix loads it
+          if (get_sub_group_local_id() == max_inclusive) {
+            local_prefix = prefix_states[lookback_id].inclusive_prefix;
+          // threads with higher ids load exclusive prefix
+          } else if (max_inclusive < get_sub_group_local_id()) {
+            local_prefix = prefix_states[lookback_id].agg;
+          }
+        // if no thread has inclusive prefix, all threads load exclusive prefix
+        } else {
+          // every thread looks back another partition
+          lookback_id = max(lookback_id - get_sub_group_size(), 0);
+          local_prefix = prefix_states[lookback_id].agg;
+        }
+        uint scanned_prefix = sub_group_scan_inclusive_add(local_prefix);
+        // last thread has the full prefix, update the workgroup level exclusive prefix
+        if (get_sub_group_local_id() == get_sub_group_size() - 1) {
+          exclusive_prefix += scanned_prefix;
+        }
       }
     }
-    prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
-    atomic_store_explicit(&prefix_states[part_id].flag, FLG_P, memory_order_release);
+    // finally last thread in subgroup updates this workgroup's prefix/flag
+    if (get_sub_group_local_id() == get_sub_group_size() - 1) {
+      prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
+      atomic_store_explicit(&prefix_states[part_id].flag, FLG_P, memory_order_release);
+    }
   }
 
   // ensure all threads in the block see exclusive_prefix  
