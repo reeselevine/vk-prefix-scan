@@ -63,6 +63,7 @@ int main(int argc, char* argv[]) {
 	auto out = easyvk::Buffer(device, size, sizeof(uint32_t));
 	auto prefixStates = easyvk::Buffer(device, numWorkgroups, 3*sizeof(uint32_t));
 	auto partitionCtr = easyvk::Buffer(device, 1, sizeof(uint32_t));
+	auto debug = easyvk::Buffer(device, 1, sizeof(uint32_t));
 
 	// Write initial values to the buffers.
 	for (int i = 0; i < size; i++) {
@@ -73,7 +74,7 @@ int main(int argc, char* argv[]) {
 	out.clear();
 	prefixStates.clear();
 	partitionCtr.clear();
-	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr};
+	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
 
 	std::vector<uint32_t> spvCode = 
 	#include "build/prefix-scan.cinit"
@@ -89,12 +90,14 @@ int main(int argc, char* argv[]) {
 
 	float time = program.runWithDispatchTiming();
 
+	std::cout << "debug: " << debug.load<uint>(0) << "\n";
+
 	// Check the output.
 	if (checkResults) {
 		uint32_t ref = 0;
 		for (int i = 0; i < size; i++) {
 			ref += i;
-			//std::cout << "out[" << i << "]: " << out.load<uint>(i) << ", ref:" << ref << "\n";
+			std::cout << "out[" << i << "]: " << out.load<uint>(i) << ", ref:" << ref << "\n";
 			assert(out.load<uint>(i) == ref);
 		}
 	}

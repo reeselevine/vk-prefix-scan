@@ -22,7 +22,8 @@ __kernel void prefix_scan(
   __global uint *out,
   __local uint *scratch,
   __global PrefixState *prefix_states,
-  __global atomic_uint *partition) {
+  __global atomic_uint *partition,
+  __global uint * debug) {
   __local uint part_id;
   // first thread in each block gets its part by atomically incrementing the global partition variable.
   if (get_local_id(0) == 0) {
@@ -31,8 +32,10 @@ __kernel void prefix_scan(
   //ensure that all threads in the block see the updated part_id
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
+
   // each thread works on items indexed on its partition and position in the block
   uint my_id = part_id * get_local_size(0) * BATCH_SIZE + get_local_id(0) * BATCH_SIZE;
+
 
   // load work into private memory and compute thread local prefix sum
   uint values[BATCH_SIZE];
@@ -41,6 +44,9 @@ __kernel void prefix_scan(
   for (uint i = 1; i < BATCH_SIZE; i++) {
     sum += in[my_id + i];
     values[i] = sum;
+  }
+  for (uint i = 0; i < BATCH_SIZE; i++) {
+    out[my_id + i] = 42;
   }
 
   // store inclusive thread prefix to local memory so that a block wide prefix can be computed
@@ -60,11 +66,13 @@ __kernel void prefix_scan(
     for (uint i = start; i < start + rake_batch_size; i++) {
       scratch[i] += prefix;
     }
+    // synchronize scratch memory across threads in subgroup 
+    sub_group_barrier(CLK_LOCAL_MEM_FENCE);
   }
 
   __local uint exclusive_prefix;
 
-  // one thread in each block updates the aggregate/flag (use first thread to avoid extra workgroup barrier)
+  // one thread in each block updates the aggregate/flag
   if (get_local_id(0) == 0) {
     uint flag = FLG_A;
     prefix_states[part_id].agg = scratch[get_local_size(0) - 1];
@@ -97,7 +105,7 @@ __kernel void prefix_scan(
           done = true;
           // we want to find the highest thread with an inclusive prefix
           uint inclusive = flag == FLG_P ? get_sub_group_local_id() : 0;
-          // now all threads in the subgroup will know the highest thread with inclusive prefix
+          // broadcast to  all threads in the subgroup the highest thread with inclusive prefix
           uint max_inclusive = sub_group_reduce_max(inclusive);
           // highest thread with inclusive prefix loads it
           if (get_sub_group_local_id() == max_inclusive) {
@@ -129,12 +137,18 @@ __kernel void prefix_scan(
   // ensure all threads in the block see exclusive_prefix  
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
+  if (get_local_id(0) == 64) {
+    debug[0] = exclusive_prefix;
+  }
+
+
   uint total_exclusive_prefix = exclusive_prefix;
   // scratch contains an inclusive prefix per thread, so the exclusive prefix is grabbed from 
   // the previous thread's scratch location
   if (get_local_id(0) != 0) {
     total_exclusive_prefix += scratch[get_local_id(0) - 1];
   }
+
 
   // store final prefix back to memory
   for (uint i = 0; i < BATCH_SIZE; i++) {
