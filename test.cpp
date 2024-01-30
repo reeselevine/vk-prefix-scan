@@ -54,6 +54,8 @@ int main(int argc, char* argv[]) {
 	auto partition = easyvk::Buffer(device, 1, sizeof(uint32_t));
 	auto debug = easyvk::Buffer(device, 1, sizeof(uint32_t));
 
+	partition.store<uint>(0, 42);
+
 	out.clear();
 	std::vector<easyvk::Buffer> bufs = {out, partition, debug};
 

@@ -11,5 +11,5 @@ __kernel void test(
 
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
  
-  out[part_id + get_local_id(0)] = 42;
+  out[get_local_id(0)] = part_id;
 }
