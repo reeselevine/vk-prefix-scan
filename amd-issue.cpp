@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
 	std::vector<easyvk::Buffer> bufs = {out, partition, debug};
 
 	std::vector<uint32_t> spvCode = 
-	#include "build/test.cinit"
+	#include "build/amd-issue.cinit"
 	;
 	auto program = easyvk::Program(device, spvCode, bufs);
 
