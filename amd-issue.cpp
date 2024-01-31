@@ -10,7 +10,6 @@ int main(int argc, char* argv[]) {
   int numWorkgroups = 1;
   int deviceID = 0;
   bool enableValidationLayers = false;
-  bool checkResults = false;
   int c;
 
     while ((c = getopt (argc, argv, "vct:w:d:")) != -1)
@@ -24,9 +23,6 @@ int main(int argc, char* argv[]) {
         break;
       case 'v':
 	enableValidationLayers = true;
-	break;
-      case 'c':
-	checkResults = true;
 	break;
       case 'd':
 	deviceID = atoi(optarg);
@@ -75,12 +71,9 @@ int main(int argc, char* argv[]) {
 	std::cout << "debug: " << debug.load<uint>(0) << "\n";
 
 	// Check the output.
-	if (checkResults) {
-		for (int i = 0; i < size; i++) {
-			std::cout << "out[" << i << "]: " << out.load<uint>(i) << "\n";
-		}
+	for (int i = 0; i < size; i++) {
+		std::cout << "out[" << i << "]: " << out.load<uint>(i) << "\n";
 	}
-
 
 	// Cleanup.
 	program.teardown();
