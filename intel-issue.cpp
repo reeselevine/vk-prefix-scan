@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
 	std::cout << "Using device: " << device.properties.deviceName << "\n";
   std::cout << "Device subgroup size: " << device.subgroupSize() << "\n";
 	// Define the buffers to use in the kernel. 
-	auto out = easyvk::Buffer(device, 2, sizeof(uint32_t));
+	auto out = easyvk::Buffer(device, 4, sizeof(uint32_t));
 
 	out.clear();
 	std::vector<easyvk::Buffer> bufs = {out};
@@ -62,8 +62,10 @@ int main(int argc, char* argv[]) {
 	program.initialize("test");
 
 	float time = program.runWithDispatchTiming();
-	std::cout << "Thread 16 recorded subgroup size: " << out.load<uint>(0) << "\n";
-	std::cout << "Thread 16 recorded subgroup id: " << out.load<uint>(1) << "\n";
+	std::cout << "Thread 0 recorded subgroup size: " << out.load<uint>(0) << "\n";
+	std::cout << "Thread 0 recorded subgroup id: " << out.load<uint>(1) << "\n";
+	std::cout << "Thread 16 recorded subgroup size: " << out.load<uint>(2) << "\n";
+	std::cout << "Thread 16 recorded subgroup id: " << out.load<uint>(3) << "\n";
 
 	// Cleanup.
 	program.teardown();
