@@ -4,7 +4,7 @@ CLSPVFLAGS = -cl-std=CL2.0 -inline-entry-points
 
 .PHONY: clean
 
-all: build easyvk blit prefix-scan amd-issue  intel-issue
+all: build easyvk blit prefix-scan amd-issue amd-mesa-issue intel-issue
 
 build:
 	mkdir -p build
@@ -20,6 +20,9 @@ blit: blit.cinit blit.cpp
 
 amd-issue: amd-issue.cinit amd-issue.cpp
 	$(CXX) $(CXXFLAGS) -Ieasyvk/src build/easyvk.o amd-issue.cpp -lvulkan -o build/amd-issue.run
+
+amd-mesa-issue: amd-mesa-issue.cinit amd-mesa-issue.cpp
+	$(CXX) $(CXXFLAGS) -Ieasyvk/src build/easyvk.o amd-mesa-issue.cpp -lvulkan -o build/amd-mesa-issue.run
 
 intel-issue: intel-issue.cinit intel-issue.cpp
 	$(CXX) $(CXXFLAGS) -Ieasyvk/src build/easyvk.o intel-issue.cpp -lvulkan -o build/intel-issue.run
