@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
 	out.clear();
 	prefixStates.clear();
 	partitionCtr.clear();
-	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
+	std::vector<easyvk::Buffer> bufs = { partitionCtr, debug};
 
 	std::vector<uint32_t> spvCode = 
 	#include "build/prefix-scan.cinit"
