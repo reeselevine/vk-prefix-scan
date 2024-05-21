@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
 	auto out = easyvk::Buffer(device, size, sizeof(uint32_t));
 	auto prefixStates = easyvk::Buffer(device, numWorkgroups, 3*sizeof(uint32_t));
 	auto partitionCtr = easyvk::Buffer(device, 1, sizeof(uint32_t));
-	auto debug = easyvk::Buffer(device, 1, sizeof(uint32_t));
+	auto debug = easyvk::Buffer(device, 64, sizeof(uint32_t));
 
 	// Write initial values to the buffers.
 	for (int i = 0; i < size; i++) {
@@ -71,6 +71,7 @@ int main(int argc, char* argv[]) {
 		// the type when using the load/store method. 
 		in.store<uint32_t>(i, i);
 	}
+	
 	out.clear();
 	prefixStates.clear();
 	partitionCtr.clear();
@@ -90,7 +91,14 @@ int main(int argc, char* argv[]) {
 
 	float time = program.runWithDispatchTiming();
 
-	std::cout << "debug: " << debug.load<uint>(0) << "\n";
+
+	std::cout << "first subgroup observes exclusive_prefix " << debug.load<uint>(0) << "\n";
+	std::cout << "second subgroup observes exclusive_prefix " << debug.load<uint>(1) << "\n";
+
+	// for (int i = 1; i < 65; i++) {
+	// 	std::cout << "debug: " << debug.load<uint>(i) << "\n";
+	// }
+	
 
 	// Check the output.
 	if (checkResults) {
