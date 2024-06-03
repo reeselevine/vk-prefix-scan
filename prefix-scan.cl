@@ -117,8 +117,8 @@ __kernel void prefix_scan(
         // if no thread has inclusive prefix, all threads load exclusive prefix
         } else {
           // every thread looks back another partition
-	  lookback_id = calc_lookback_id(lookback_id, get_sub_group_size());
           local_prefix = prefix_states[lookback_id].agg;
+          lookback_id = calc_lookback_id(lookback_id, get_sub_group_size());
         }
         uint scanned_prefix = sub_group_scan_inclusive_add(local_prefix);
         // last thread has the full prefix, update the workgroup level exclusive prefix
