@@ -2,7 +2,7 @@ CXX = g++
 CXXFLAGS = -std=c++17
 CLSPVFLAGS = -cl-std=CL2.0 -inline-entry-points
 
-.PHONY: clean
+.PHONY: easyvk clean
 
 all: build easyvk blit prefix-scan amd-issue amd-mesa-issue intel-issue
 
