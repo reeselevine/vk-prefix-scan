@@ -30,6 +30,9 @@ intel-issue: intel-issue.cinit intel-issue.cpp
 prefix-scan: prefix-scan.cinit prefix-scan.cpp
 	$(CXX) $(CXXFLAGS) -Ieasyvk/src build/easyvk.o prefix-scan.cpp -lvulkan -o build/prefix-scan.run
 
+memcpy: memcpy.cinit memcpy.cpp
+	$(CXX) $(CXXFLAGS) -Ieasyvk/src build/easyvk.o memcpy.cpp -lvulkan -o build/memcpy.run
+
 %.spv: %.cl
 	clspv -w -cl-std=CL2.0 -inline-entry-points $< -o build/$@
 
