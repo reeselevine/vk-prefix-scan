@@ -4,6 +4,7 @@
 #include <cassert>
 #include <vector>
 #include <unistd.h>
+#include <numeric>
 
 #define BATCH_SIZE 8
 
@@ -15,9 +16,9 @@ void computeReferencePrefixSum(uint32_t* ref, int size) {
 }
 
 int main(int argc, char* argv[]) {
-  int workgroupSize = 64;
-  int numWorkgroups = 32;
-  int deviceID = 0;
+  int workgroupSize = 1024;
+  int numWorkgroups = 9128;
+  int deviceID = 1;
   bool enableValidationLayers = false;
   bool checkResults = false;
   int c;
@@ -49,7 +50,8 @@ int main(int argc, char* argv[]) {
       default:
         abort ();
       }
-  auto size = numWorkgroups * workgroupSize * BATCH_SIZE;
+    auto size = numWorkgroups * workgroupSize * BATCH_SIZE;
+	auto sizeBytes = numWorkgroups * workgroupSize * BATCH_SIZE * sizeof(uint);
 	// Initialize instance.
 	auto instance = easyvk::Instance(enableValidationLayers);
 	// Get list of available physical devices.
@@ -57,24 +59,29 @@ int main(int argc, char* argv[]) {
 	// Create device from first physical device.
 	auto device = easyvk::Device(instance, physicalDevices.at(deviceID));
 	std::cout << "Using device: " << device.properties.deviceName << "\n";
-  std::cout << "Device subgroup size: " << device.subgroupSize() << "\n";
+    std::cout << "Device subgroup size: " << device.subgroupSize() << "\n";
 	// Define the buffers to use in the kernel. 
-	auto in = easyvk::Buffer(device, size, sizeof(uint32_t));
-	auto out = easyvk::Buffer(device, size, sizeof(uint32_t));
-	auto prefixStates = easyvk::Buffer(device, numWorkgroups, 3*sizeof(uint32_t));
-	auto partitionCtr = easyvk::Buffer(device, 1, sizeof(uint32_t));
-	auto debug = easyvk::Buffer(device, 1, sizeof(uint32_t));
+	
+	std::vector<uint> hostIn(size, 0);
+	std::vector<uint> hostOut(size, 0);
+	std::vector<uint> hostDebug(2, 0);
+	std::vector<uint> ref(size, 0);
 
-	// Write initial values to the buffers.
-	for (int i = 0; i < size; i++) {
-		// The buffer provides an untyped view of the memory, so you must specify
-		// the type when using the load/store method. 
-		in.store<uint32_t>(i, i);
-	}
-	out.clear();
-	prefixStates.clear();
-	partitionCtr.clear();
-	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
+	std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
+
+
+
+	auto in = easyvk::Buffer(device, sizeBytes, true);
+	in.store(hostIn.data(), sizeBytes);
+
+	auto out = easyvk::Buffer(device, sizeBytes, true);
+	auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
+	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
+	auto debug = easyvk::Buffer(device, sizeof(uint), true);
+
+	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
+	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
+
 
 	std::vector<uint32_t> spvCode = 
 	#include "build/prefix-scan.cinit"
@@ -83,27 +90,35 @@ int main(int argc, char* argv[]) {
 
 	program.setWorkgroups(numWorkgroups);
 	program.setWorkgroupSize(workgroupSize);
-	program.setWorkgroupMemoryLength(workgroupSize*sizeof(uint32_t), 0);
+	program.setWorkgroupMemoryLength(workgroupSize*sizeof(uint), 0);
 
 	// Run the kernel.
 	program.initialize("prefix_scan");
 
 	float time = program.runWithDispatchTiming();
+	
 
-	std::cout << "debug: " << debug.load<uint>(0) << "\n";
 
-	// Check the output.
+	out.load(hostOut.data(), sizeBytes);
+	debug.load(hostDebug.data(), sizeof(uint));
+
+	
+
+	std::cout << "debug: " << hostDebug[0] << "\n";
 	if (checkResults) {
-		uint32_t ref = 0;
+		computeReferencePrefixSum(ref.data(), size);
 		for (int i = 0; i < size; i++) {
-			ref += i;
-			std::cout << "out[" << i << "]: " << out.load<uint>(i) << ", ref:" << ref << "\n";
-			assert(out.load<uint>(i) == ref);
+			//std::cout << "out[" << i << "]: " << hostOut[i] << 
+			std::cout << "out[" << i << "]: " << hostOut[i] << ", ref:" << ref[i] << "\n";
+			assert(hostOut[i] == ref[i]);
 		}
 	}
 
+	
+
+	//std::cout << "debug: " << hostDebug[0] << "\n";
 	// time is returned in ns, so don't need to divide by bytes to get GBPS
-        std::cout << "GPU Time: " << time / 1000000 << " ms\n";
+    std::cout << "GPU Time: " << time / 1000000 << " ms\n";
 	std::cout << "Throughput: " << (((long) size) * 4 * 2)/(time) << " GBPS\n";
 
 	// Cleanup.
