@@ -79,8 +79,8 @@ int main(int argc, char* argv[]) {
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
 	auto debug = easyvk::Buffer(device, sizeof(uint), true);
 
-	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
-	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
+	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
+	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
 
 
 	std::vector<uint32_t> spvCode = 
