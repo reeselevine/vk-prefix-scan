@@ -1,12 +1,11 @@
 #define BATCH_SIZE 8
 
-#define FLG_A 1
-#define FLG_P 2
+#define FLG_A 1U
+#define FLG_P 2U
 
 typedef struct PrefixState {
-  uint agg;
   uint inclusive_prefix;
-  atomic_uint flag;
+  atomic_uint flagg;
 } PrefixState;
 
 uint calc_lookback_id(uint part_id, uint lookback_amt) {
@@ -22,13 +21,13 @@ __kernel void prefix_scan(
   __global uint *out,
   __local uint *scratch,
   __global PrefixState *prefix_states,
-  //__global atomic_uint *partition,
+  __global atomic_uint *partition,
   __global uint * debug) {
   __local uint part_id;
   // first thread in each block gets its part by atomically incrementing the global partition variable.
   if (get_local_id(0) == 0) {
-    //part_id = atomic_fetch_add(partition, 1);
-    part_id = get_group_id(0);
+    part_id = atomic_fetch_add(partition, 1);
+    //part_id = get_group_id(0);
   }
   //ensure that all threads in the block see the updated part_id
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
@@ -36,6 +35,7 @@ __kernel void prefix_scan(
   __local uint exclusive_prefix;
   __local uint temp;
   __local uint inclusive_scan;
+  uint mask = ~(3 << 30);
 
   int scan_type;
   scan_type = 'c';
@@ -160,14 +160,21 @@ __kernel void prefix_scan(
 
   // one thread in each block updates the aggregate/flag
   if (get_local_id(0) == 0) {
-    uint flag = FLG_A;
-    prefix_states[part_id].agg = scratch[get_local_size(0) - 1];
+    // bit packing the first most significant 2 bits with FLG_A
+    // TODO: we dont need an atomic here because only 1 memory per workgroup and 1 thread touching it
+
+    
+    atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_A << 30) | (scratch[get_local_size(0) - 1] & mask), memory_order_relaxed);
+    
+    //uint flag = FLG_P;
     // first block does not need to look back
     if (part_id == 0) {
-      flag = FLG_P;
+      //flag = FLG_P;
       prefix_states[part_id].inclusive_prefix = scratch[get_local_size(0) - 1];
+      atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << 30) | (scratch[get_local_size(0) - 1] & mask), memory_order_relaxed);
+      debug[0] = ((FLG_P << 30) | (scratch[get_local_size(0) - 1] & mask));
     }
-    atomic_store_explicit(&prefix_states[part_id].flag, flag, memory_order_release);
+    //atomic_store_explicit(&prefix_states[part_id].flag, flag, memory_order_release);
 
     // might as well initialize exclusive prefix here too
     exclusive_prefix = 0;
@@ -181,8 +188,12 @@ __kernel void prefix_scan(
     bool done = false;
     // spin and lookback until full prefix is set
     while (!done) {
-      uint flag = atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire);
-      // check if all threads see a vaget_local_id(0) prefix
+      uint flagg = atomic_load_explicit(&prefix_states[lookback_id].flagg, memory_order_acquire);     
+      uint agg = flagg & 0x3FFFFFFF; //  00010011 = 11010011 & 00111111 
+      uint flag = flagg >> 30;       //  00000011 = 6 >> 11010011
+      
+
+      // check if all threads see a valid get_local_id(0) prefix
       if (sub_group_all(flag)) {
         uint local_prefix = 0;
         // check if any thread has an inclusive prefix
@@ -198,12 +209,15 @@ __kernel void prefix_scan(
             local_prefix = prefix_states[lookback_id].inclusive_prefix;
           // threads with higher ids load exclusive prefix
           } else if (max_inclusive < get_sub_group_local_id()) {
-            local_prefix = prefix_states[lookback_id].agg;
+            //local_prefix = prefix_states[lookback_id].agg;
+            local_prefix = agg;
+
           }
         // if no thread has inclusive prefix, all threads load exclusive prefix
         } else {
           // every thread looks back another partition
-          local_prefix = prefix_states[lookback_id].agg;
+          //local_prefix = prefix_states[lookback_id].agg;
+          local_prefix = agg;
           lookback_id = calc_lookback_id(lookback_id, get_sub_group_size());
         }
         uint scanned_prefix = sub_group_scan_inclusive_add(local_prefix);
@@ -213,10 +227,13 @@ __kernel void prefix_scan(
         }
       }
     }
+
     // finally last thread in subgroup updates this workgroup's prefix/flag
     if (get_sub_group_local_id() == get_sub_group_size() - 1) {
       prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
-      atomic_store_explicit(&prefix_states[part_id].flag, FLG_P, memory_order_release);
+
+      // this part_id no longer needs agg so just a flag is necesarry
+      atomic_store_explicit(&prefix_states[part_id].flagg, FLG_P << 30, memory_order_release);
     }
   }
 
@@ -224,7 +241,7 @@ __kernel void prefix_scan(
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
   if (get_local_id(0) == 0 && part_id == 1) {
-    debug[0] = 25;
+    //debug[0] = 25;
   }
 
 

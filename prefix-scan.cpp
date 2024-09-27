@@ -75,12 +75,13 @@ int main(int argc, char* argv[]) {
 	in.store(hostIn.data(), sizeBytes);
 
 	auto out = easyvk::Buffer(device, sizeBytes, true);
-	auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
+	//auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
+	auto prefixStates = easyvk::Buffer(device, numWorkgroups*2*sizeof(uint), true);
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
 	auto debug = easyvk::Buffer(device, sizeof(uint), true);
 
-	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
-	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
+	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
+	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
 
 
 	std::vector<uint32_t> spvCode = 
