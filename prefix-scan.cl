@@ -1,14 +1,15 @@
 //#pragma OPENCL EXTENSION cl_khr_int64_extended_atomics : enable
 #define BATCH_SIZE 8
 
-#define FLG_A 1U
-#define FLG_P 2U
-#define MASK ~(3 << 30)
-#define ANTI_MASK 30
+#define FLG_A 1UL
+#define FLG_P 2UL
+#define ANTI_MASK 62
+#define MASK ~(3UL << ANTI_MASK)
+
 
 typedef struct PrefixState {
-  uint inclusive_prefix;
-  atomic_uint flagg;
+  ulong inclusive_prefix;
+  atomic_ulong flagg;
 } PrefixState;
 
 uint calc_lookback_id(uint part_id, uint lookback_amt) {
@@ -21,12 +22,18 @@ uint calc_lookback_id(uint part_id, uint lookback_amt) {
 
 __kernel void prefix_scan(
   __global uint *in, 
-  __global uint *out,
+  __global ulong *out,
   __local uint *scratch,
   __global PrefixState *prefix_states,
   __global atomic_uint *partition,
-  __global uint * debug) {
+  __global ulong * debug) {
   __local uint part_id;
+
+
+////
+// This implemenation changes max scan from a hypothetical 92,682 -> 93,184 with 128 wgs and 128 thrds
+///
+
   // first thread in each block gets its part by atomically incrementing the global partition variable.
   if (get_local_id(0) == 0) {
     part_id = atomic_fetch_add(partition, 1);
@@ -35,12 +42,12 @@ __kernel void prefix_scan(
   //ensure that all threads in the block see the updated part_id
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
-  __local uint exclusive_prefix;
+  __local ulong exclusive_prefix;
   __local uint temp;
-  __local uint inclusive_scan;
+  __local ulong inclusive_scan;
 
   int scan_type;
-  scan_type = 'b';
+  scan_type = 'a';
 
 
 
@@ -171,8 +178,8 @@ __kernel void prefix_scan(
     if (part_id == 0) {
       prefix_states[part_id].inclusive_prefix = scratch[get_local_size(0) - 1];
       atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_relaxed);
-      //debug[0] = ((FLG_P << 30) | (scratch[get_local_size(0) - 1] & MASK));
     }
+
     // might as well initialize exclusive prefix here too
     exclusive_prefix = 0;
   }
@@ -187,14 +194,22 @@ __kernel void prefix_scan(
     bool done = false;
     // spin and lookback until full prefix is set
     while (!done) {
-      uint flagg = atomic_load_explicit(&prefix_states[lookback_id].flagg, memory_order_acquire);     
-      uint agg = flagg & 0x3FFFFFFF;  
-      uint flag = flagg >> ANTI_MASK;
+      ulong flagg = atomic_load_explicit(&prefix_states[lookback_id].flagg, memory_order_acquire);     
+      
+      ///
+      ///
+      ///
+      ulong agg = flagg & MASK;
+      uint flag = (uint)(flagg >> 62);  ///////// this needs to be an uint to work wth sub_group_all
+
       sub_group_barrier(CLK_LOCAL_MEM_FENCE);
 
       // check if all threads see a valid get_local_id(0) prefix
       if (sub_group_all(flag)) {
-        uint local_prefix = 0;
+        
+        //uint makes this work ////////
+        
+        ulong local_prefix = 0;
         // check if any thread has an inclusive prefix
         if (sub_group_any(flag == FLG_P)) {
           // we will terminate after this iteration
@@ -203,8 +218,8 @@ __kernel void prefix_scan(
           uint inclusive = flag == FLG_P ? get_sub_group_local_id() : 0;
           // broadcast to  all threads in the subgroup the highest thread with inclusive prefix
           uint max_inclusive = sub_group_reduce_max(inclusive);
-          // highest thread with inclusive prefix loads it
-          if (get_sub_group_local_id() == max_inclusive) {
+          // highest thread with inclusive  prefix loads it
+        if (get_sub_group_local_id() == max_inclusive) {
             local_prefix = prefix_states[lookback_id].inclusive_prefix;
 
           // threads with higher ids load exclusive prefix
@@ -217,18 +232,71 @@ __kernel void prefix_scan(
           local_prefix = agg;
           lookback_id = calc_lookback_id(lookback_id, get_sub_group_size());
         }
-        uint scanned_prefix = sub_group_scan_inclusive_add(local_prefix);
 
-        // if (part_id == 1) {
+        ///
+        ///  local_prefix and scanned_prefix are zero when they shouldnt
+        ///
 
-        //   debug[0] = sub_group_scan_inclusive_add(scanned_prefix);
+        ulong scanned_prefix;
+
+        uint part1 = (uint)(local_prefix & 0x000000000000FFFFUL);          // Lowest 16 bits
+        uint part2 = (uint)((local_prefix >> 16) & 0x000000000000FFFFUL);  // Next 16 bits
+        uint part3 = (uint)((local_prefix>> 32) & 0x000000000000FFFFUL);  // Next 16 bits
+        uint part4 = (uint)((local_prefix>> 48) & 0x000000000000FFFFUL);  // Highest 16 bits
+
+
+        uint total_part1 = sub_group_scan_inclusive_add(part1);
+        uint total_part2 = sub_group_scan_inclusive_add(part2);
+        uint total_part3 = sub_group_scan_inclusive_add(part3);
+        uint total_part4 = sub_group_scan_inclusive_add(part4);
+
+
+
+        // if (part4 > 0xFFFF) {
+        //   part3 += (part4 >> 16);  // Carry the overflow to part3
+        //   part4 &= 0xFFFF;         // Keep only the lower 16 bits
         // }
+        // if (part3 > 0xFFFF) {
+        //     part2 += (part3 >> 16);  // Carry the overflow to part2
+        //     part3 &= 0xFFFF;         // Keep only the lower 16 bits
+        // }
+
+        // if (part2 > 0xFFFF) {
+        //     part1 += (part2 >> 16);  // Carry the overflow to part1
+        //     part2 &= 0xFFFF;         // Keep only the lower 16 bits
+        // }
+
+        // part1 &= 0xFFFF;  // Ensure part1 stays within 16 bits (no carry can propagate beyond part1 in this case)
+
+
+        scanned_prefix = ((ulong)part1 << 48) |
+                               ((ulong)part2 << 32) |
+                               ((ulong)part3 << 16) |
+                               ((ulong)part4);
+
+                        
+
+          if (part_id == 1) {
+            if (local_prefix > 0) {
+              debug[0] = local_prefix;
+              if (get_sub_group_local_id() == get_sub_group_size() - 1) {
+                debug[1] = scanned_prefix;            
+              }
+            }
+          }
+          
+
+        //scanned_prefix += (total_low < local_sum_low) ? 1 : 0;
+
         // last thread has the full prefix, update the workgroup level exclusive prefix
         if (get_sub_group_local_id() == get_sub_group_size() - 1) {
           exclusive_prefix += scanned_prefix;
+          //debug[0] = scanned_prefix;
         }
       }
     }
+
+    //after:
 
     // finally last thread in subgroup updates this workgroup's prefix/flag
     if (get_sub_group_local_id() == get_sub_group_size() - 1) {
@@ -242,28 +310,50 @@ __kernel void prefix_scan(
   // ensure all threads in the block see exclusive_prefix  
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
-    // if (get_local_id(0) == 0 && part_id > 254) {
-    //   debug[0] = exclusive_prefix;
-    // }  
+  uint tep;
+  if (get_local_id(0) != 0) {
+    tep = scratch[get_local_id(0) - 1];
+  }
 
+if (1) {
+  uint total_exclusive_prefix_low = (uint)((exclusive_prefix & 0xFFFFFFFF00000000UL) >> 32);
+  uint total_exclusive_prefix_high = (uint)((exclusive_prefix & 0xFFFFFFFFL) >> 32);
 
-  uint total_exclusive_prefix = exclusive_prefix;
   // scratch contains an inclusive prefix per thread, so the exclusive prefix is grabbed from 
   // the previous thread's scratch location
-  if (get_local_id(0) != 0) {
-    total_exclusive_prefix += scratch[get_local_id(0) - 1];
+
+
+  if (get_local_id(0) != 0) { 
+    for (uint i = 0; i < BATCH_SIZE; i++) {
+      out[my_id + i] = values[i] + ((ulong)(total_exclusive_prefix_high << 32) | total_exclusive_prefix_low) + tep;
+    }
+  }else{
+    for (uint i = 0; i < BATCH_SIZE; i++) {
+      out[my_id + i] = values[i] + ((ulong)(total_exclusive_prefix_high << 32) | total_exclusive_prefix_low);
+    }
+
+  }
+}else{
+  // uint total_exclusive_prefix_low = (uint)((exclusive_prefix & 0xFFFFFFFF00000000UL) >> 32);
+  // uint total_exclusive_prefix_high = (uint)((exclusive_prefix & 0xFFFFFFFFL) >> 32);
+
+  if (get_local_id(0) != 0) { 
+    for (uint i = 0; i < BATCH_SIZE; i++) {
+      out[my_id + i] = values[i] + exclusive_prefix + tep;
+    }
+  }else{
+    for (uint i = 0; i < BATCH_SIZE; i++) {
+      out[my_id + i] = values[i] + exclusive_prefix;
+    }
 
   }
 
-  // if (get_local_id(0) - 1 && part_id == 1) {
-  //     debug[0] = exclusive_prefix;
-  // }  
+}
 
-
-  for (uint i = 0; i < BATCH_SIZE; i++) {
-    out[my_id + i] = values[i] + total_exclusive_prefix;
-  }
-
+    if (get_local_id(0) == get_local_size(0) - 1 && part_id == 1) {
+      //debug[1] = 1;
+      //debug[0] = scratch[get_local_size(0) - 1];
+    }
 
 
 }

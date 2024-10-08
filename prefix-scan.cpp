@@ -8,7 +8,7 @@
 
 #define BATCH_SIZE 8
 
-void computeReferencePrefixSum(uint32_t* ref, int size) {
+void computeReferencePrefixSum(uint64_t* ref, int size) {
   ref[0] = 0;
   for (int i = 1; i < size; i++) {
     ref[i] = ref[i - 1] + i;
@@ -16,8 +16,8 @@ void computeReferencePrefixSum(uint32_t* ref, int size) {
 }
 
 int main(int argc, char* argv[]) {
-  int workgroupSize = 1024;
-  int numWorkgroups = 9128;
+  int workgroupSize = 128;
+  int numWorkgroups = 128;
   int deviceID = 1;
   bool enableValidationLayers = false;
   bool checkResults = false;
@@ -63,9 +63,9 @@ int main(int argc, char* argv[]) {
 	// Define the buffers to use in the kernel. 
 	
 	std::vector<uint> hostIn(size, 0);
-	std::vector<uint> hostOut(size, 0);
-	std::vector<uint> hostDebug(2, 0);
-	std::vector<uint> ref(size, 0);
+	std::vector<uint64_t> hostOut(size, 0);
+	std::vector<uint64_t> hostDebug(2, 0);
+	std::vector<uint64_t> ref(size, 0);
 
 	std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
 
@@ -74,11 +74,11 @@ int main(int argc, char* argv[]) {
 	auto in = easyvk::Buffer(device, sizeBytes, true);
 	in.store(hostIn.data(), sizeBytes);
 
-	auto out = easyvk::Buffer(device, sizeBytes, true);
+	auto out = easyvk::Buffer(device, sizeBytes * 2, true);
 	//auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
-	auto prefixStates = easyvk::Buffer(device, numWorkgroups*2*sizeof(uint), true);
+	auto prefixStates = easyvk::Buffer(device, numWorkgroups*4*sizeof(uint), true);
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
-	auto debug = easyvk::Buffer(device, sizeof(uint), true);
+	auto debug = easyvk::Buffer(device, 2*sizeof(uint64_t), true);
 
 	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
 	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
@@ -100,24 +100,29 @@ int main(int argc, char* argv[]) {
 	
 
 
-	out.load(hostOut.data(), sizeBytes);
-	debug.load(hostDebug.data(), sizeof(uint));
-
+	out.load(hostOut.data(), sizeBytes * 2);
+	debug.load(hostDebug.data(), 2*sizeof(uint64_t));
 	
 
-	std::cout << "debug: " << hostDebug[0] << "\n";
+	std::cout << "debug[0]: " << hostDebug[0] << "\n";
 	if (checkResults) {
 		computeReferencePrefixSum(ref.data(), size);
 		for (int i = 0; i < size; i++) {
 			//std::cout << "out[" << i << "]: " << hostOut[i] << 
 			std::cout << "out[" << i << "]: " << hostOut[i] << ", ref:" << ref[i] << "\n";
+
+			if (hostOut[i] != ref[i]) {
+				std::cout << "debug: " << hostDebug[0] << "\n";
+			}
+
 			assert(hostOut[i] == ref[i]);
 		}
 	}
 
 	
 
-	//std::cout << "debug: " << hostDebug[0] << "\n";
+	std::cout << "debug[0]: " << hostDebug[0] << "\n";
+	std::cout << "debug[1]: " << hostDebug[1] << "\n";
 	// time is returned in ns, so don't need to divide by bytes to get GBPS
     std::cout << "GPU Time: " << time / 1000000 << " ms\n";
 	std::cout << "Throughput: " << (((long) size) * 4 * 2)/(time) << " GBPS\n";
