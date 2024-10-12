@@ -38,7 +38,7 @@ __kernel void prefix_scan(
   __local uint inclusive_scan;
 
   int scan_type;
-  scan_type = 'c';
+  scan_type = debug[0];
 
 
 
@@ -238,6 +238,9 @@ __kernel void prefix_scan(
   for (uint i = 0; i < BATCH_SIZE; i++) {
     out[my_id + i] = values[i] + total_exclusive_prefix;
   }
+
+
+  
 
 
 

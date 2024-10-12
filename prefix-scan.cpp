@@ -22,8 +22,8 @@ int main(int argc, char* argv[]) {
   bool enableValidationLayers = false;
   bool checkResults = false;
   int c;
-
-    while ((c = getopt (argc, argv, "vct:w:d:")) != -1)
+  char alg = 'a';
+    while ((c = getopt (argc, argv, "vct:w:d:b:")) != -1)
     switch (c)
       {
       case 't':
@@ -37,6 +37,9 @@ int main(int argc, char* argv[]) {
 	break;
       case 'c':
 	checkResults = true;
+	break;
+	case 'b':
+		alg = optarg[0];
 	break;
       case 'd':
 	deviceID = atoi(optarg);
@@ -78,6 +81,9 @@ int main(int argc, char* argv[]) {
 	auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
 	auto debug = easyvk::Buffer(device, sizeof(uint), true);
+
+
+	debug.fill(alg);
 
 	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
 	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
