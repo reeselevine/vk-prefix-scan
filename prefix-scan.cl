@@ -223,10 +223,6 @@ __kernel void prefix_scan(
   // ensure all threads in the block see exclusive_prefix  
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
-  if (get_local_id(0) == 0 && part_id == 1) {
-    debug[0] = 25;
-  }
-
 
   uint total_exclusive_prefix = exclusive_prefix;
   // scratch contains an inclusive prefix per thread, so the exclusive prefix is grabbed from 
@@ -239,8 +235,14 @@ __kernel void prefix_scan(
     out[my_id + i] = values[i] + total_exclusive_prefix;
   }
 
+  if (part_id == 63 && get_local_id(0) == 0) {
+    if (out[65535] == 65536) {
+      debug[0] = 1;
+    }else{
+      debug[1] = 1;
+    }
+  }
 
-  
 
 
 
