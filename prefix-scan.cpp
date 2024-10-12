@@ -8,22 +8,29 @@
 
 #define BATCH_SIZE 8
 
-void computeReferencePrefixSum(uint32_t* ref, int size) {
-  ref[0] = 0;
-  for (int i = 1; i < size; i++) {
-    ref[i] = ref[i - 1] + i;
+void computeReferencePrefixSum(uint32_t* ref, int size, int overflow) {
+  ref[0] = 1;
+  if (overflow){
+	for (int i = 1; i < size; i++) {
+    	ref[i] = ref[i - 1] + i;
+  	}
+  }else{
+	for (int i = 1; i < size; i++) {
+    	ref[i] = i + 1;
+  	}
   }
 }
 
 int main(int argc, char* argv[]) {
   int workgroupSize = 1024;
-  int numWorkgroups = 9128;
+  int numWorkgroups = 1024;
   int deviceID = 1;
   bool enableValidationLayers = false;
   bool checkResults = false;
   int c;
+  char alg = 'a';
 
-    while ((c = getopt (argc, argv, "vct:w:d:")) != -1)
+    while ((c = getopt (argc, argv, "vct:w:d:b:")) != -1)
     switch (c)
       {
       case 't':
@@ -35,6 +42,9 @@ int main(int argc, char* argv[]) {
       case 'v':
 	enableValidationLayers = true;
 	break;
+		case 'b':
+		alg = optarg[0];
+		break;
       case 'c':
 	checkResults = true;
 	break;
@@ -69,16 +79,21 @@ int main(int argc, char* argv[]) {
 
 	std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
 
-
+	
 
 	auto in = easyvk::Buffer(device, sizeBytes, true);
-	in.store(hostIn.data(), sizeBytes);
+	//in.store(hostIn.data(), sizeBytes);
+	in.fill(1);
+
+
 
 	auto out = easyvk::Buffer(device, sizeBytes, true);
 	//auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
 	auto prefixStates = easyvk::Buffer(device, numWorkgroups*2*sizeof(uint), true);
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
 	auto debug = easyvk::Buffer(device, sizeof(uint), true);
+
+	debug.fill(alg); 
 
 	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
 	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
@@ -105,9 +120,9 @@ int main(int argc, char* argv[]) {
 
 	
 
-	std::cout << "debug: " << hostDebug[0] << "\n";
+	//std::cout << "debug: " << hostDebug[0] << "\n";
 	if (checkResults) {
-		computeReferencePrefixSum(ref.data(), size);
+		computeReferencePrefixSum(ref.data(), size, false);
 		for (int i = 0; i < size; i++) {
 			//std::cout << "out[" << i << "]: " << hostOut[i] << 
 			std::cout << "out[" << i << "]: " << hostOut[i] << ", ref:" << ref[i] << "\n";
@@ -117,7 +132,7 @@ int main(int argc, char* argv[]) {
 
 	
 
-	//std::cout << "debug: " << hostDebug[0] << "\n";
+	std::cout << "debug: " << hostDebug[0] << "\n";
 	// time is returned in ns, so don't need to divide by bytes to get GBPS
     std::cout << "GPU Time: " << time / 1000000 << " ms\n";
 	std::cout << "Throughput: " << (((long) size) * 4 * 2)/(time) << " GBPS\n";

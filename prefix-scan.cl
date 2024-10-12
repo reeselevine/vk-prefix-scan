@@ -1,10 +1,10 @@
-//#pragma OPENCL EXTENSION cl_khr_int64_extended_atomics : enable
 #define BATCH_SIZE 8
 
 #define FLG_A 1U
 #define FLG_P 2U
-#define MASK ~(3 << 30)
 #define ANTI_MASK 30
+#define MASK ~(3 << ANTI_MASK)
+
 
 typedef struct PrefixState {
   uint inclusive_prefix;
@@ -40,7 +40,7 @@ __kernel void prefix_scan(
   __local uint inclusive_scan;
 
   int scan_type;
-  scan_type = 'b';
+  scan_type = debug[0];
 
 
 
@@ -219,10 +219,6 @@ __kernel void prefix_scan(
         }
         uint scanned_prefix = sub_group_scan_inclusive_add(local_prefix);
 
-        // if (part_id == 1) {
-
-        //   debug[0] = sub_group_scan_inclusive_add(scanned_prefix);
-        // }
         // last thread has the full prefix, update the workgroup level exclusive prefix
         if (get_sub_group_local_id() == get_sub_group_size() - 1) {
           exclusive_prefix += scanned_prefix;
@@ -242,11 +238,6 @@ __kernel void prefix_scan(
   // ensure all threads in the block see exclusive_prefix  
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
-    // if (get_local_id(0) == 0 && part_id > 254) {
-    //   debug[0] = exclusive_prefix;
-    // }  
-
-
   uint total_exclusive_prefix = exclusive_prefix;
   // scratch contains an inclusive prefix per thread, so the exclusive prefix is grabbed from 
   // the previous thread's scratch location
@@ -255,15 +246,57 @@ __kernel void prefix_scan(
 
   }
 
-  // if (get_local_id(0) - 1 && part_id == 1) {
-  //     debug[0] = exclusive_prefix;
-  // }  
-
-
   for (uint i = 0; i < BATCH_SIZE; i++) {
     out[my_id + i] = values[i] + total_exclusive_prefix;
   }
 
 
+
+    // threadgroup a works but threadgroup b doesn't    1025 1024
+    if (part_id == 1023 && get_local_id(0) == 0) {
+      if (out[8388607] == 8388608) {
+        debug[0] = 1;
+      }else{
+        debug[0] = out[8388607];
+      }
+    }
+
+
+    //// threadgroup a works but threadgroup b doesn't    128 128
+    // if (part_id == 127 && get_local_id(0) == 0) {
+    //   if (out[131071] == 131072) {
+    //     debug[0] = 1;
+    //   }else{
+    //     debug[0] = out[131072];
+    //   }
+    // }
+
+
+    // // threadgroup a works but threadgroup b doesn't    128 256
+    // if (part_id == 255 && get_local_id(0) == 0) {
+    //   if (out[262143] == 262144) {
+    //     debug[0] = 1;
+    //   }else{
+    //     debug[0] = 0;
+    //   }
+    // }
+
+    // // threadgroup a works but threadgroup b doesn't    256 256
+    // if (part_id == 255 && get_local_id(0) == 0) {
+    //   if (out[524287] == 524288) {
+    //     debug[0] = 1;
+    //   }else{
+    //     debug[0] = 0;
+    //   }
+    // }
+
+        // threadgroup a works but threadgroup b doesn't    256 256
+    if (part_id == 63 && get_local_id(0) == 0) {
+      if (out[65535] == 65536) {
+        debug[0] = 1;
+      }else{
+        debug[0] = 0;
+      }
+    }
 
 }
