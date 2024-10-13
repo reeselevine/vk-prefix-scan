@@ -76,12 +76,13 @@ int main(int argc, char* argv[]) {
 	std::vector<uint> hostDebug(2, 0);
 	std::vector<uint> ref(size, 0);
 
-	std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
+	//std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
 
 
 
 	auto in = easyvk::Buffer(device, sizeBytes, true);
-	in.store(hostIn.data(), sizeBytes);
+	//in.store(hostIn.data(), sizeBytes);
+	in.fill(1);
 
 	auto out = easyvk::Buffer(device, sizeBytes, true);
 	auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
