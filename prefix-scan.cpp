@@ -8,16 +8,22 @@
 
 #define BATCH_SIZE 8
 
-void computeReferencePrefixSum(uint32_t* ref, int size) {
-  ref[0] = 0;
-  for (int i = 1; i < size; i++) {
-    ref[i] = ref[i - 1] + i;
+void computeReferencePrefixSum(uint32_t* ref, int size, int overflow) {
+  ref[0] = 1;
+  if (overflow){
+	for (int i = 1; i < size; i++) {
+    	ref[i] = ref[i - 1] + i;
+  	}
+  }else{
+	for (int i = 1; i < size; i++) {
+    	ref[i] = i + 1;
+  	}
   }
 }
 
 int main(int argc, char* argv[]) {
   int workgroupSize = 1024;
-  int numWorkgroups = 9128;
+  int numWorkgroups = 1024;
   int deviceID = 1;
   bool enableValidationLayers = false;
   bool checkResults = false;
@@ -112,7 +118,7 @@ int main(int argc, char* argv[]) {
 
 	std::cout << "debug: " << hostDebug[0] << "\n";
 	if (checkResults) {
-		computeReferencePrefixSum(ref.data(), size);
+		computeReferencePrefixSum(ref.data(), size, false);
 		for (int i = 0; i < size; i++) {
 			//std::cout << "out[" << i << "]: " << hostOut[i] << 
 			std::cout << "out[" << i << "]: " << hostOut[i] << ", ref:" << ref[i] << "\n";

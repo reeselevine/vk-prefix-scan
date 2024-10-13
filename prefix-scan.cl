@@ -239,7 +239,7 @@ __kernel void prefix_scan(
     if (out[65535] == 65536) {
       debug[0] = 1;
     }else{
-      debug[1] = 1;
+      debug[0] = 1;
     }
   }
 
