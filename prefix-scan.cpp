@@ -22,8 +22,8 @@ void computeReferencePrefixSum(uint32_t* ref, int size, int overflow) {
 }
 
 int main(int argc, char* argv[]) {
-  int workgroupSize = 1024;
-  int numWorkgroups = 1024;
+  int workgroupSize = 128;
+  int numWorkgroups = 1;
   int deviceID = 1;
   bool enableValidationLayers = false;
   bool checkResults = false;
@@ -70,35 +70,26 @@ int main(int argc, char* argv[]) {
 	auto device = easyvk::Device(instance, physicalDevices.at(deviceID));
 	std::cout << "Using device: " << device.properties.deviceName << "\n";
     std::cout << "Device subgroup size: " << device.subgroupSize() << "\n";
-	// Define the buffers to use in the kernel. 
 	
-	std::vector<uint> hostIn(size, 0);
+	
+	// Define the host local buffers. 
 	std::vector<uint> hostOut(size, 0);
 	std::vector<uint> hostDebug(2, 0);
 	std::vector<uint> ref(size, 0);
 
-	std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
-
-	
-
+	// Define in buffer, fill with 1s.
 	auto in = easyvk::Buffer(device, sizeBytes, true);
-	//in.store(hostIn.data(), sizeBytes);
 	in.fill(1);
 
-
-
+	// Define device local buffers
 	auto out = easyvk::Buffer(device, sizeBytes, true);
-	//auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
-	auto prefixStates = easyvk::Buffer(device, numWorkgroups*2*sizeof(uint), true);
-	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
 	auto debug = easyvk::Buffer(device, sizeof(uint), true);
 
+	// Use debug buffer to also change reduction algorithm.
 	debug.fill(alg); 
 
-	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
-	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
-
-
+	// Initilize program
+	std::vector<easyvk::Buffer> bufs = {in, out, debug};
 	std::vector<uint32_t> spvCode = 
 	#include "build/prefix-scan.cinit"
 	;
@@ -113,24 +104,18 @@ int main(int argc, char* argv[]) {
 
 	float time = program.runWithDispatchTiming();
 	
-
-
+	// Retrieve data from GPU buffers
 	out.load(hostOut.data(), sizeBytes);
 	debug.load(hostDebug.data(), sizeof(uint));
 
-	
 
-	//std::cout << "debug: " << hostDebug[0] << "\n";
 	if (checkResults) {
 		computeReferencePrefixSum(ref.data(), size, false);
 		for (int i = 0; i < size; i++) {
-			//std::cout << "out[" << i << "]: " << hostOut[i] << 
 			std::cout << "out[" << i << "]: " << hostOut[i] << ", ref:" << ref[i] << "\n";
 			assert(hostOut[i] == ref[i]);
 		}
 	}
-
-	
 
 	std::cout << "debug: " << hostDebug[0] << "\n";
 	// time is returned in ns, so don't need to divide by bytes to get GBPS
@@ -141,8 +126,7 @@ int main(int argc, char* argv[]) {
 	program.teardown();
 	in.teardown();
 	out.teardown();
-	prefixStates.teardown();
-	partitionCtr.teardown();
+	debug.teardown();
 	device.teardown();
 	instance.teardown();
 	return 0;
