@@ -278,11 +278,11 @@ __kernel void prefix_scan(
 
 
     // threadgroup a works but threadgroup b doesn't    1025 1024
-    if (part_id == 1023 && get_local_id(0) == 0) {
-      if (out[8388607] == 8388608) {
+    if (part_id == 31 && get_local_id(0) == 0) {
+      if (out[32767] == 32768) {
         debug[0] = 1;
       }else{
-        debug[0] = out[8388607];
+        debug[0] = 0;
       }
     }
 
