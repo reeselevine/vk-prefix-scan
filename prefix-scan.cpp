@@ -28,9 +28,10 @@ int main(int argc, char* argv[]) {
   bool enableValidationLayers = false;
   bool checkResults = false;
   int c;
+  int p = 1;
   char alg = 'a';
 
-    while ((c = getopt (argc, argv, "vct:w:d:b:")) != -1)
+    while ((c = getopt (argc, argv, "vct:w:d:b:p:")) != -1)
     switch (c)
       {
       case 't':
@@ -48,6 +49,9 @@ int main(int argc, char* argv[]) {
       case 'c':
 	checkResults = true;
 	break;
+	case 'p':
+		p = atoi(optarg);
+		break;
       case 'd':
 	deviceID = atoi(optarg);
 	break;
@@ -77,24 +81,26 @@ int main(int argc, char* argv[]) {
 	std::vector<uint> hostDebug(2, 0);
 	std::vector<uint> ref(size, 0);
 
-	std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
+	//std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
 
 	
+	hostDebug[0] = alg;
+	hostDebug[1] = p;
 
 	auto in = easyvk::Buffer(device, sizeBytes, true);
 	//in.store(hostIn.data(), sizeBytes);
-	in.fill(1);
+	in.fill(1U);
 
-
+	auto debug = easyvk::Buffer(device, sizeof(uint)*2, true);
+	debug.store(hostDebug.data(), sizeof(uint)*2);
 
 	auto out = easyvk::Buffer(device, sizeBytes, true);
-	//auto prefixStates = easyvk::Buffer(device, numWorkgroups*3*sizeof(uint), true);
 	auto prefixStates = easyvk::Buffer(device, numWorkgroups*2*sizeof(uint), true);
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
-	auto debug = easyvk::Buffer(device, sizeof(uint), true);
+	
 
 	partitionCtr.fill(0U); 
-	debug.fill(alg); 
+	 
 
 	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
 	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
