@@ -93,6 +93,7 @@ int main(int argc, char* argv[]) {
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
 	auto debug = easyvk::Buffer(device, sizeof(uint), true);
 
+	partitionCtr.fill(0U); 
 	debug.fill(alg); 
 
 	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
