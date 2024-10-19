@@ -314,14 +314,4 @@ __kernel void prefix_scan(
     //     debug[0] = 0;
     //   }
     // }
-
-        // threadgroup a works but threadgroup b doesn't    256 256
-    if (part_id == 63 && get_local_id(0) == 0) {
-      if (out[65535] == 65536) {
-        debug[0] = 1;
-      }else{
-        debug[0] = 0;
-      }
-    }
-
 }
