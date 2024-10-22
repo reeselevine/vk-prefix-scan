@@ -164,24 +164,25 @@ __kernel void prefix_scan(
 
   
   // one thread in each block updates the aggregate/flag
-  if (get_local_id(0) == 0) {
+  if (get_sub_group_id() == 0 && get_sub_group_local_id() == 0) { // This has to be this rather than get_local_id == 0 bcz exprfx mst be synced by subbarrier in lookback
     // bit packing the first most significant 2 bits with FLG_A
     // TODO maybe: we dont need an atomic here because only 1 memory per workgroup and 1 thread touching it
     
-    atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_A << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_relaxed);
+    atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_A << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_release);
     
     // first block does not need to look back
     if (part_id == 0) {
       prefix_states[part_id].inclusive_prefix = scratch[get_local_size(0) - 1];
-      atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_relaxed);
+      atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_release);
       //debug[0] = ((FLG_P << 30) | (scratch[get_local_size(0) - 1] & MASK));
     }
     // might as well initialize exclusive prefix here too
     exclusive_prefix = 0;
   }
-  
-  if (p){
+
+
   //work_group_barrier(CLK_LOCAL_MEM_FENCE);
+  if (p){
   // lookback phase (parallelized), all threads in first subgroup participate
   if (part_id != 0 && get_sub_group_id() == 0) {
     // ensure all threads in the subgroup see exclusive_prefix initialized
@@ -276,42 +277,4 @@ __kernel void prefix_scan(
   }
 
 
-
-    // threadgroup a works but threadgroup b doesn't    1025 1024
-    if (part_id == 31 && get_local_id(0) == 0) {
-      if (out[32767] == 32768) {
-        debug[0] = 1;
-      }else{
-        debug[0] = 0;
-      }
-    }
-
-
-    //// threadgroup a works but threadgroup b doesn't    128 128
-    // if (part_id == 127 && get_local_id(0) == 0) {
-    //   if (out[131071] == 131072) {
-    //     debug[0] = 1;
-    //   }else{
-    //     debug[0] = out[131072];
-    //   }
-    // }
-
-
-    // // threadgroup a works but threadgroup b doesn't    128 256
-    // if (part_id == 255 && get_local_id(0) == 0) {
-    //   if (out[262143] == 262144) {
-    //     debug[0] = 1;
-    //   }else{
-    //     debug[0] = 0;
-    //   }
-    // }
-
-    // // threadgroup a works but threadgroup b doesn't    256 256
-    // if (part_id == 255 && get_local_id(0) == 0) {
-    //   if (out[524287] == 524288) {
-    //     debug[0] = 1;
-    //   }else{
-    //     debug[0] = 0;
-    //   }
-    // }
 }

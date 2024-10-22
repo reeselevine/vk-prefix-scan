@@ -99,7 +99,9 @@ int main(int argc, char* argv[]) {
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
 	
 
-	partitionCtr.fill(0U); 
+	partitionCtr.fill(0U);
+	prefixStates.fill(0U);
+	out.fill(0U); 
 	 
 
 	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
@@ -126,7 +128,7 @@ int main(int argc, char* argv[]) {
 	debug.load(hostDebug.data(), sizeof(uint));
 
 	
-
+	hostDebug[0] = hostOut[size - 1] == size ? 1 : 0;
 	//std::cout << "debug: " << hostDebug[0] << "\n";
 	if (checkResults) {
 		computeReferencePrefixSum(ref.data(), size, false);
