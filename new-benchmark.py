@@ -2,17 +2,18 @@ import os
 import subprocess
 import re
 import statistics
+import matplotlib.pyplot as plt
 
 # Path to the executable
 executable = "./build/prefix-scan.run"
 
 # Initial values
-device = 1
+device = 2
 workgroups = 128  # Initial -w value
 threads = 64      # Initial -t value
 p = 1
 b = 'a'
-n = 100  # Number of runs per configuration
+n = 5  # Number of runs per configuration
 
 # Set the maximum limits for workgroups and threads
 max_workgroups = 2048
@@ -99,13 +100,12 @@ while workgroups <= max_workgroups and threads <= max_threads and done == False:
     if threads < max_threads:
         threads *= 2
     else:
-        threads = 64  # Reset threads to initial value    
+        threads = 64  # Reset threads to initial value
         if workgroups < max_workgroups:
             workgroups *= 2
 
-
-
 # Analyze results: find highest throughput for each w * t group
+max_throughput_results = []
 print("\nSummary of results (grouped by w * t):")
 for w_times_t, data_list in analysis.items():
     # Find the combination with the highest throughput for each w * t
@@ -115,3 +115,23 @@ for w_times_t, data_list in analysis.items():
     print(f"    Average Throughput: {best_combination['avg_throughput']}")
     print(f"    Variance of Throughput: {best_combination['var_throughput']}")
     print(f"    Error Rate: {best_combination['error_rate'] * 100:.2f}%")
+    
+    # Store max throughput for plotting
+    max_throughput_results.append((w_times_t, best_combination['avg_throughput']))
+
+# Sort results by w * t for better plotting
+max_throughput_results.sort(key=lambda x: x[0])
+
+# Plot the results
+w_times_t_values  = [x*8 for x in analysis.keys()]
+throughput_values = [x[1] for x in max_throughput_results]
+
+plt.figure(figsize=(10, 6))
+plt.plot(w_times_t_values, throughput_values, marker='o', linestyle='-', color='b')
+plt.title("Max Throughput Per Array Size")
+plt.xlabel("Array Size in uint (4 Bytes)")
+plt.ylabel("Throughput GB/s")
+plt.grid(True)
+# plt.xscale('log')  # Using log scale for better visualization if w * t grows exponentially
+plt.xscale('log', base=2)
+plt.savefig('uhd.png')

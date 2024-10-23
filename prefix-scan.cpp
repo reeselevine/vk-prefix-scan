@@ -85,7 +85,10 @@ int main(int argc, char* argv[]) {
 
 	
 	hostDebug[0] = alg;
+	
 	hostDebug[1] = p;
+
+	
 
 	auto in = easyvk::Buffer(device, sizeBytes, true);
 	//in.store(hostIn.data(), sizeBytes);
@@ -119,9 +122,7 @@ int main(int argc, char* argv[]) {
 
 	// Run the kernel.
 	program.initialize("prefix_scan");
-
 	float time = program.runWithDispatchTiming();
-
 	out.load(hostOut.data(), sizeBytes);
 	debug.load(hostDebug.data(), sizeof(uint) * 2);
 

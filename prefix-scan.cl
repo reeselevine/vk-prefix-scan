@@ -177,9 +177,6 @@ __kernel void prefix_scan(
   }
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
-
-
-
   if (p){
   // lookback phase (parallelized), all threads in first subgroup participate
   if (part_id != 0 && get_sub_group_id() == 0) {
@@ -243,27 +240,26 @@ __kernel void prefix_scan(
     }
   }
   }else{
-  //    // lookback phase
-  // if (part_id != 0 && get_local_id(0) == 0) {
-  //   uint lookback_id = part_id - 1;
-  //   bool done = false;
-  //   // spin and lookback until full prefix is set
-  //   while (!done) {
-  //     uint flagg = atomic_load_explicit(&prefix_states[lookback_id].flagg, memory_order_acquire);     
-  //     uint agg = flagg & 0x3FFFFFFF;  
-  //     uint flag = flagg >> ANTI_MASK;
+  // lookback phase
+  if (part_id != 0 && get_local_id(0) == 0) {
+    int lookback_id = part_id - 1;
+    // spin and lookback until full prefix is set
+    while (lookback_id >= 0) {
+      uint flagg = atomic_load_explicit(&prefix_states[lookback_id].flagg, memory_order_acquire);     
+      uint agg = flagg & 0x3FFFFFFF;  
+      uint flag = flagg >> ANTI_MASK;
 
-  //     if (flag == FLG_P) {
-  //       exclusive_prefix += prefix_states[lookback_id].inclusive_prefix; 
-  //       done = true;
-  //     } else if (flag == FLG_A) {
-  //       exclusive_prefix += agg;
-  //       lookback_id -= 1;
-  //     }
-  //   }
-  //   prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
-  //   atomic_store_explicit(&prefix_states[part_id].flagg, FLG_P << ANTI_MASK, memory_order_release);
-  // }
+      if (flag == FLG_P) {
+        exclusive_prefix += prefix_states[lookback_id].inclusive_prefix; 
+        break;
+      } else if (flag == FLG_A) {
+        exclusive_prefix += agg;
+        lookback_id -= 1;
+      }
+    }
+    prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
+    atomic_store_explicit(&prefix_states[part_id].flagg, FLG_P << ANTI_MASK, memory_order_release);
+  }
   }
   // ensure all threads in the block see exclusive_prefix  
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
