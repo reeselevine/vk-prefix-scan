@@ -121,11 +121,9 @@ int main(int argc, char* argv[]) {
 	program.initialize("prefix_scan");
 
 	float time = program.runWithDispatchTiming();
-	
-
 
 	out.load(hostOut.data(), sizeBytes);
-	debug.load(hostDebug.data(), sizeof(uint));
+	debug.load(hostDebug.data(), sizeof(uint) * 2);
 
 	
 	hostDebug[0] = hostOut[size - 1] == size ? 1 : 0;
