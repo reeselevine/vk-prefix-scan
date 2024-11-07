@@ -13,6 +13,9 @@ typedef struct PrefixState {
 
 int calc_lookback_id(int part_id, int lookback_amt) {
   if (lookback_amt > part_id) {
+    if (get_sub_group_local_id() == get_sub_group_size()) {
+      return 0;
+    }
     return -1;
   } else {
     return part_id - lookback_amt;
@@ -189,9 +192,16 @@ __kernel void prefix_scan(
     // spin and lookback until full prefix is set
     while (!done) {
 
-      uint flagg = atomic_load_explicit(&prefix_states[lookback_id < 0 ? 0 : lookback_id].flagg, memory_order_acquire);
-      uint agg = lookback_id < 0 ? 0 : flagg & 0x3FFFFFFF;  
-      uint flag = flagg >> ANTI_MASK; // can also just give flag as 1 if lookbackid in this thread is -1 
+      uint flag;
+      uint agg;
+      if (lookback_id >= 0) {
+         uint flagg = atomic_load_explicit(&prefix_states[lookback_id].flagg, memory_order_acquire);
+         agg = flagg & 0x3FFFFFFF;
+         flag = flagg >> ANTI_MASK; // can also just give flag as 1 if lookbackid in this thread is -1 
+      }else{
+        agg = 0;
+        flag = 2;
+      }
       sub_group_barrier(CLK_LOCAL_MEM_FENCE);
       
 
