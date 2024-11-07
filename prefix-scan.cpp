@@ -8,15 +8,17 @@
 
 #define BATCH_SIZE 8
 
-void computeReferencePrefixSum(uint32_t* ref, int size, int overflow) {
-  ref[0] = 1;
+void computeReferencePrefixSum(uint32_t* ref, int size, int overflow, int start) {
+  ref[0] = start;
   if (overflow){
 	for (int i = 1; i < size; i++) {
     	ref[i] = ref[i - 1] + i;
+		// may be incorrect with diff types of the implementation var
   	}
   }else{
 	for (int i = 1; i < size; i++) {
-    	ref[i] = i + 1;
+		//std::cout << "hi\n";
+    	ref[i] = ref[i-1] + start;
   	}
   }
 }
@@ -30,11 +32,15 @@ int main(int argc, char* argv[]) {
   int c;
   int p = 1;
   char alg = 'a';
+  int alt = 1;
 
-    while ((c = getopt (argc, argv, "vct:w:d:b:p:")) != -1)
+    while ((c = getopt (argc, argv, "vct:w:d:b:p:a:")) != -1)
     switch (c)
       {
-      case 't':
+      case 'a':
+        alt = atoi(optarg);
+        break;
+	  case 't':
         workgroupSize = atoi(optarg);
         break;
       case 'w':
@@ -92,7 +98,7 @@ int main(int argc, char* argv[]) {
 
 	auto in = easyvk::Buffer(device, sizeBytes, true);
 	//in.store(hostIn.data(), sizeBytes);
-	in.fill(1U);
+	in.fill((uint)alt);
 
 	auto debug = easyvk::Buffer(device, sizeof(uint)*2, true);
 	debug.store(hostDebug.data(), sizeof(uint)*2);
@@ -127,10 +133,14 @@ int main(int argc, char* argv[]) {
 	debug.load(hostDebug.data(), sizeof(uint) * 2);
 
 	
-	hostDebug[0] = hostOut[size - 1] == size ? 1 : 0;
+	if (alt == 1) {
+		hostDebug[0] = hostOut[size - 1] == size ? 1 : 0;
+	}else{
+		hostDebug[0] = hostOut[size - 1] == size * alt ? 1 : 0;
+	}
 	//std::cout << "debug: " << hostDebug[0] << "\n";
 	if (checkResults) {
-		computeReferencePrefixSum(ref.data(), size, false);
+		computeReferencePrefixSum(ref.data(), size, false, alt);
 		for (int i = 0; i < size; i++) {
 			//std::cout << "out[" << i << "]: " << hostOut[i] << 
 			std::cout << "out[" << i << "]: " << hostOut[i] << ", ref:" << ref[i] << "\n";
