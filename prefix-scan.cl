@@ -1,4 +1,4 @@
-#define BATCH_SIZE 8
+#define BATCH_SIZE 64
 
 #define FLG_A 1U
 #define FLG_P 2U
@@ -44,6 +44,7 @@ __kernel void prefix_scan(
 
   int scan_type;
   int p;
+  
   scan_type = debug[0];
   p = debug[1];
 
