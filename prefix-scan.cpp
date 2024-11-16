@@ -127,31 +127,31 @@ int main(int argc, char* argv[]) {
 
 	if (BATCH_SIZE == 1) {
 		spvCode = 
-		#include "batch_size/prefix-scan1.cinit"
+		#include "batch_size/bp-prefix-scan1.cinit"
 		;
 	}else if(BATCH_SIZE == 2) {
 		spvCode = 
-		#include "batch_size/prefix-scan2.cinit"
+		#include "batch_size/bp-prefix-scan2.cinit"
 		;
 	}else if(BATCH_SIZE == 4) {
 		spvCode = 
-		#include "batch_size/prefix-scan4.cinit"
+		#include "batch_size/bp-prefix-scan4.cinit"
 		;
 	}else if(BATCH_SIZE == 8) {
 		spvCode = 
-		#include "batch_size/prefix-scan8.cinit"
+		#include "batch_size/bp-prefix-scan8.cinit"
 		;
 	}else if(BATCH_SIZE == 16) {
 		spvCode = 
-		#include "batch_size/prefix-scan16.cinit"
+		#include "batch_size/bp-prefix-scan16.cinit"
 		;
 	}else if(BATCH_SIZE == 32) {
 		spvCode = 
-		#include "batch_size/prefix-scan32.cinit"
+		#include "batch_size/bp-prefix-scan32.cinit"
 		;
 	}else if(BATCH_SIZE == 64) {
 		spvCode = 
-		#include "batch_size/prefix-scan64.cinit"
+		#include "batch_size/bp-prefix-scan64.cinit"
 		;
 	}
 
