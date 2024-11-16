@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <numeric>
 
-#define BATCH_SIZE 8
+//#define BATCH_SIZE 64
 
 void computeReferencePrefixSum(uint32_t* ref, int size, int overflow, int start) {
   ref[0] = start;
@@ -32,14 +32,18 @@ int main(int argc, char* argv[]) {
   int c;
   int p = 1;
   char alg = 'a';
+  int BATCH_SIZE = 8;
   int alt = 1;
 
-    while ((c = getopt (argc, argv, "vct:w:d:b:p:a:")) != -1)
+    while ((c = getopt (argc, argv, "vct:w:d:b:p:a:s:")) != -1)
     switch (c)
       {
       case 'a':
         alt = atoi(optarg);
         break;
+	  case 's':
+        BATCH_SIZE = atoi(optarg);
+		break;
 	  case 't':
         workgroupSize = atoi(optarg);
         break;
@@ -86,7 +90,8 @@ int main(int argc, char* argv[]) {
 	std::vector<uint> hostOut(size, 0);
 	std::vector<uint> ref(size, 0);
 
-	
+	// auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
+	// partitionCtr.fill(0U);
 
 	auto in = easyvk::Buffer(device, sizeBytes, true);
 	in.fill((uint)alt);
@@ -98,10 +103,37 @@ int main(int argc, char* argv[]) {
 	std::vector<easyvk::Buffer> bufs = {in, out};
 	//std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
 
+std::vector<uint32_t> spvCode;
 
-	std::vector<uint32_t> spvCode = 
-	#include "build/blit.cinit"
-	;
+	if (BATCH_SIZE == 1) {
+		spvCode = 
+		#include "batch_size/blit1.cinit"
+		;
+	}else if(BATCH_SIZE == 2) {
+		spvCode = 
+		#include "batch_size/blit2.cinit"
+		;
+	}else if(BATCH_SIZE == 4) {
+		spvCode = 
+		#include "batch_size/blit4.cinit"
+		;
+	}else if(BATCH_SIZE == 8) {
+		spvCode = 
+		#include "batch_size/blit8.cinit"
+		;
+	}else if(BATCH_SIZE == 16) {
+		spvCode = 
+		#include "batch_size/blit16.cinit"
+		;
+	}else if(BATCH_SIZE == 32) {
+		spvCode = 
+		#include "batch_size/blit32.cinit"
+		;
+	}else if(BATCH_SIZE == 64) {
+		spvCode = 
+		#include "batch_size/blit64.cinit"
+		;
+	}
 	auto program = easyvk::Program(device, spvCode, bufs);
 
 	program.setWorkgroups(numWorkgroups);
