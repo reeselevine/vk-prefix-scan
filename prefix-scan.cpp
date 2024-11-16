@@ -123,42 +123,42 @@ int main(int argc, char* argv[]) {
 	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
 	// std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
 
-	// std::vector<uint32_t> spvCode;
+	std::vector<uint32_t> spvCode;
 
-	// if (BATCH_SIZE == 1) {
-	// 	spvCode = 
-	// 	#include "batch_size/prefix-scan1.cinit"
-	// 	;
-	// }else if(BATCH_SIZE == 2) {
-	// 	spvCode = 
-	// 	#include "batch_size/prefix-scan2.cinit"
-	// 	;
-	// }else if(BATCH_SIZE == 4) {
-	// 	spvCode = 
-	// 	#include "batch_size/prefix-scan4.cinit"
-	// 	;
-	// }else if(BATCH_SIZE == 8) {
-	// 	spvCode = 
-	// 	#include "batch_size/prefix-scan8.cinit"
-	// 	;
-	// }else if(BATCH_SIZE == 16) {
-	// 	spvCode = 
-	// 	#include "batch_size/prefix-scan16.cinit"
-	// 	;
-	// }else if(BATCH_SIZE == 32) {
-	// 	spvCode = 
-	// 	#include "batch_size/prefix-scan32.cinit"
-	// 	;
-	// }else if(BATCH_SIZE == 64) {
-	// 	spvCode = 
-	// 	#include "batch_size/prefix-scan64.cinit"
-	// 	;
-	// }
+	if (BATCH_SIZE == 1) {
+		spvCode = 
+		#include "batch_size/prefix-scan1.cinit"
+		;
+	}else if(BATCH_SIZE == 2) {
+		spvCode = 
+		#include "batch_size/prefix-scan2.cinit"
+		;
+	}else if(BATCH_SIZE == 4) {
+		spvCode = 
+		#include "batch_size/prefix-scan4.cinit"
+		;
+	}else if(BATCH_SIZE == 8) {
+		spvCode = 
+		#include "batch_size/prefix-scan8.cinit"
+		;
+	}else if(BATCH_SIZE == 16) {
+		spvCode = 
+		#include "batch_size/prefix-scan16.cinit"
+		;
+	}else if(BATCH_SIZE == 32) {
+		spvCode = 
+		#include "batch_size/prefix-scan32.cinit"
+		;
+	}else if(BATCH_SIZE == 64) {
+		spvCode = 
+		#include "batch_size/prefix-scan64.cinit"
+		;
+	}
 
 
-	std::vector<uint32_t> spvCode = 
-	#include "build/prefix-scan.cinit"
-	;
+	// std::vector<uint32_t> spvCode = 
+	// #include "build/prefix-scan.cinit"
+	// ;
 	auto program = easyvk::Program(device, spvCode, bufs);
 
 	program.setWorkgroups(numWorkgroups);
