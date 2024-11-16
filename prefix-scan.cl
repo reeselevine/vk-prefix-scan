@@ -1,4 +1,4 @@
-#define BATCH_SIZE 8
+#define BATCH_SIZE 4
 
 #define FLG_A 1
 #define FLG_P 2
@@ -9,9 +9,12 @@ typedef struct PrefixState {
   atomic_uint flag;
 } PrefixState;
 
-uint calc_lookback_id(uint part_id, uint lookback_amt) {
+int calc_lookback_id(int part_id, int lookback_amt) {
   if (lookback_amt > part_id) {
-    return 0;
+    if (get_sub_group_local_id() == get_sub_group_size()) {
+      return 0;
+    }
+    return -1;
   } else {
     return part_id - lookback_amt;
   }
@@ -38,7 +41,10 @@ __kernel void prefix_scan(
   __local uint inclusive_scan;
 
   int scan_type;
+  int p;
+
   scan_type = debug[0];
+  p = debug[1];
 
 
 
@@ -173,15 +179,26 @@ __kernel void prefix_scan(
     exclusive_prefix = 0;
   }
   
+  if (p){
+
   // lookback phase (parallelized), all threads in first subgroup participate
   if (part_id != 0 && get_sub_group_id() == 0) {
     // ensure all threads in the subgroup see exclusive_prefix initialized
     sub_group_barrier(CLK_LOCAL_MEM_FENCE);
-    uint lookback_id = calc_lookback_id(part_id, get_sub_group_size() - get_sub_group_local_id());
+    int lookback_id = calc_lookback_id((int)part_id, get_sub_group_size() - get_sub_group_local_id());
     bool done = false;
     // spin and lookback until full prefix is set
     while (!done) {
-      uint flag = atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire);
+      uint flag;
+      uint agg;
+      if (lookback_id >= 0) {
+         flag = atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire);
+         agg = prefix_states[lookback_id].agg;
+      }else{
+        agg = 0;
+        flag = FLG_P;
+      }
+      sub_group_barrier(CLK_LOCAL_MEM_FENCE);
       // check if all threads see a vaget_local_id(0) prefix
       if (sub_group_all(flag)) {
         uint local_prefix = 0;
@@ -195,15 +212,15 @@ __kernel void prefix_scan(
           uint max_inclusive = sub_group_reduce_max(inclusive);
           // highest thread with inclusive prefix loads it
           if (get_sub_group_local_id() == max_inclusive) {
-            local_prefix = prefix_states[lookback_id].inclusive_prefix;
+            local_prefix = lookback_id < 0 ? 0 : prefix_states[lookback_id].inclusive_prefix;
           // threads with higher ids load exclusive prefix
           } else if (max_inclusive < get_sub_group_local_id()) {
-            local_prefix = prefix_states[lookback_id].agg;
+            local_prefix = agg;
           }
         // if no thread has inclusive prefix, all threads load exclusive prefix
         } else {
           // every thread looks back another partition
-          local_prefix = prefix_states[lookback_id].agg;
+          local_prefix = agg;
           lookback_id = calc_lookback_id(lookback_id, get_sub_group_size());
         }
         uint scanned_prefix = sub_group_scan_inclusive_add(local_prefix);
@@ -220,6 +237,30 @@ __kernel void prefix_scan(
     }
   }
 
+  }else{
+  
+  if (part_id != 0 && get_local_id(0) == 0) {
+    uint lookback_id = part_id - 1;
+    bool done = false;
+    // spin and lookback until full prefix is set
+    while (!done) {
+      uint flag = atomic_load_explicit(&prefix_states[lookback_id].flag, memory_order_acquire);
+      if (flag == FLG_P) {
+        exclusive_prefix += prefix_states[lookback_id].inclusive_prefix; 
+        done = true;
+      } else if (flag == FLG_A) {
+        exclusive_prefix += prefix_states[lookback_id].agg;
+        lookback_id -= 1;
+      }
+    }
+    prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
+    atomic_store_explicit(&prefix_states[part_id].flag, FLG_P, memory_order_release);
+  }
+
+    
+  }
+
+
   // ensure all threads in the block see exclusive_prefix  
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -233,14 +274,6 @@ __kernel void prefix_scan(
 
   for (uint i = 0; i < BATCH_SIZE; i++) {
     out[my_id + i] = values[i] + total_exclusive_prefix;
-  }
-
-  if (part_id == 63 && get_local_id(0) == 0) {
-    if (out[65535] == 65536) {
-      debug[0] = 1;
-    }else{
-      debug[0] = 1;
-    }
   }
 
 
