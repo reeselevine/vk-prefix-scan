@@ -5,14 +5,16 @@ import statistics
 import matplotlib.pyplot as plt
 import math
 import pandas as pd
+import time
+start = time.time()
 
 fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
 
 error_commands = [('Begin:', None)]
 # Set the maximum limits for threads
 max_threads = 1024
-#max_size = 1073741824
-max_size = 65536
+max_size = 1073741824
+#max_size = 65536
 
 # Regex patterns to extract throughput and error
 throughput_pattern = re.compile(r'Throughput:\s*(\d+(\.\d+)?)')
@@ -83,12 +85,12 @@ def update_blit_analysis(w, t, bs, avg_throughput, var_throughput, error_rate, a
     })
 
 
-def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_batch_size, _min_threads, _label):
+def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_batch_size, _min_threads, _label, _power_of_two):
     analysis = {}
     
     if not _blit:
         # Benchmark loop
-        power_of_two = 1
+        power_of_two = _power_of_two
         for ll in range(1, _max_batch_size):
             workgroups = 32  # Initial -w value
             threads = _min_threads      # Initial -t value
@@ -164,7 +166,7 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
             del temp[0]
             df[el[0]] = temp 
 
-        fig3, ax3 = plt.subplots(figsize=(6, 2))  # Adjust size for the table
+        fig3, ax3 = plt.subplots(figsize=(10, 6))  # Adjust size for the table
         ax3.axis('off')  # Turn off the axes for the table
         table_data = [list(df.columns)] + df.values.tolist()
         table = ax3.table(cellText=table_data, colLabels=None, cellLoc='center', loc='center')
@@ -172,7 +174,7 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
         fig3.savefig('pd-folder/' + _label + '.png',dpi=300)
     else:
         # Benchmark loop
-        power_of_two = 1
+        power_of_two = _power_of_two
         for ll in range(1, _max_batch_size):
             workgroups = 32  # Initial -w value
             threads = _min_threads      # Initial -t value
@@ -243,7 +245,7 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
             df[el[0]] = temp
             #df[el[0]] = df[el[0]].astype(str)
 
-        fig4, ax4 = plt.subplots(figsize=(6, 2))  # Adjust size for the table
+        fig4, ax4 = plt.subplots(figsize=(10, 6))  # Adjust size for the table
         ax4.axis('off')  # Turn off the axes for the table
         table_data = [list(df.columns)] + df.values.tolist()
         table = ax4.table(cellText=table_data, colLabels=None, cellLoc='center', loc='center')
@@ -252,11 +254,12 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
 
         
             
-run_benchmark(False, max_size, 1, 'blue', "./main-bench-path/bp-prefix-scan.run", 5, 1, 5, 64, "AMD XT 7900 - bp & par")
-run_benchmark(False, max_size, 1, 'green', "./main-bench-path/prefix-scan.run", 5, 1, 5, 64, "AMD XT 7900 - no bp & par")
-run_benchmark(True, max_size, 1, 'black', "./main-bench-path/blit.run", 5, 1, 5, 64, "AMD XT 7900 - blit")
-run_benchmark(False, max_size, 1, 'orange', "./main-bench-path/bp-prefix-scan.run", 5, 0, 5, 64, "AMD XT 7900 - bp & no par")
-run_benchmark(False, max_size, 1, 'red', "./main-bench-path/prefix-scan.run", 5, 0, 5, 64, "AMD XT 7900 - no bp & no par")
+#run_benchmark(False, max_size, 0, 'blue', "./main-bench-path/bp-prefix-scan.run", 5,  1, 5, 64, "AMD XT 7900 - bp & par")
+run_benchmark(False, max_size, 0, 'blue', "./main-bench-path/bp-prefix-scan.run", 5,  1, 2, 64, "AMD XT 7900 - bp & par", 8)
+run_benchmark(False, max_size, 0, 'green', "./main-bench-path/prefix-scan.run", 5, 1, 5, 64, "AMD XT 7900 - no bp & par", 8)
+# run_benchmark(True, max_size, 0, 'black', "./main-bench-path/blit.run", 5, 1, 2, 64, "AMD XT 7900 - blit", 1)
+#run_benchmark(False, max_size, 0, 'orange', "./main-bench-path/bp-prefix-scan.run", 5, 0, 5, 64, "AMD XT 7900 - bp & no par", 1)
+#run_benchmark(False, max_size, 0, 'red', "./main-bench-path/prefix-scan.run", 5, 0, 5, 64, "AMD XT 7900 - no bp & no par", 1)
 
 
 # Plot settings
@@ -275,6 +278,10 @@ fig.savefig("plots/exhaustive-bench-complete.png")
 for i in error_commands:
     print(i)    
 
+end = time.time()
 
+print(end - start)
+print("seconds")
 # save data so we cna see if different runs re marginlly different or very different.
-# unlock the workgroups
+# do this by graphing a scatter plot so you can see all of the  points compared to eahcother 
+
