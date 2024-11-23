@@ -255,9 +255,9 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
         
             
 #run_benchmark(False, max_size, 0, 'blue', "./main-bench-path/bp-prefix-scan.run", 5,  1, 5, 64, "AMD XT 7900 - bp & par")
-run_benchmark(False, max_size, 0, 'blue', "./main-bench-path/bp-prefix-scan.run", 5,  1, 2, 64, "AMD XT 7900 - bp & par", 8)
-run_benchmark(False, max_size, 0, 'green', "./main-bench-path/prefix-scan.run", 5, 1, 5, 64, "AMD XT 7900 - no bp & par", 8)
-# run_benchmark(True, max_size, 0, 'black', "./main-bench-path/blit.run", 5, 1, 2, 64, "AMD XT 7900 - blit", 1)
+run_benchmark(False, max_size, 0, 'blue', "./main-bench-path/bp-prefix-scan.run", 5,  1, 2, 32, "AMD XT 7900 - bp & par", 4)
+run_benchmark(False, max_size, 0, 'green', "./main-bench-path/prefix-scan.run", 5, 1, 5, 32, "AMD XT 7900 - no bp & par", 4)
+run_benchmark(True, max_size, 0, 'black', "./main-bench-path/blit.run", 5, 1, 3, 32, "AMD XT 7900 - blit", 1)
 #run_benchmark(False, max_size, 0, 'orange', "./main-bench-path/bp-prefix-scan.run", 5, 0, 5, 64, "AMD XT 7900 - bp & no par", 1)
 #run_benchmark(False, max_size, 0, 'red', "./main-bench-path/prefix-scan.run", 5, 0, 5, 64, "AMD XT 7900 - no bp & no par", 1)
 
