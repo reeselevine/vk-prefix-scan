@@ -14,7 +14,7 @@ error_commands = [('Begin:', None)]
 # Set the maximum limits for threads
 max_threads = 1024
 max_size = 1073741824
-#max_size = 65536
+#max_size = 262144
 
 # Regex patterns to extract throughput and error
 throughput_pattern = re.compile(r'Throughput:\s*(\d+(\.\d+)?)')
@@ -85,13 +85,12 @@ def update_blit_analysis(w, t, bs, avg_throughput, var_throughput, error_rate, a
     })
 
 
-def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_batch_size, _min_threads, _label, _power_of_two):
+def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _min_batch_size, _max_batch_size, _min_threads, _label):
     analysis = {}
-    
     if not _blit:
         # Benchmark loop
-        power_of_two = _power_of_two
-        for ll in range(1, _max_batch_size):
+        power_of_two = _min_batch_size
+        while not (power_of_two > _max_batch_size):
             workgroups = 32  # Initial -w value
             threads = _min_threads      # Initial -t value
             while (workgroups * threads <= _max_size):
@@ -160,7 +159,7 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
         #     ax1.annotate(f"w='{wt[0]}'\nt='{wt[1]}'\nbs='{wt[2]}", (w_times_t_bs_values[i], throughput_values[i]), textcoords="offset points", xytext=(0, 9), ha='center', fontsize=7)
 
         df = pd.DataFrame()
-        df['BYTES'] = ['GB/s', 'LOCAL METHOD', 'STD DEV', 'WORKGROUPS', 'THREADS', 'BATCH SIZE']
+        df['BYTES'] = ['GB/s', 'LOCAL METHOD', 'STD_DEV', 'WORKGROUPS', 'THREADS', 'BATCH SIZE']
         for el in max_throughput_results:
             temp = [i for i in el]
             del temp[0]
@@ -174,8 +173,8 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
         fig3.savefig('pd-folder/' + _label + '.png',dpi=300)
     else:
         # Benchmark loop
-        power_of_two = _power_of_two
-        for ll in range(1, _max_batch_size):
+        power_of_two = _min_batch_size
+        while not (power_of_two > _max_batch_size):
             workgroups = 32  # Initial -w value
             threads = _min_threads      # Initial -t value
             while (workgroups * threads <= _max_size):
@@ -238,7 +237,7 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
         #     ax1.annotate(f"w='{wt[0]}'\nt='{wt[1]}'\nbs='{wt[2]}", (w_times_t_bs_values[i], throughput_values[i]), textcoords="offset points", xytext=(0, 9), ha='center', fontsize=7)
 
         df = pd.DataFrame()
-        df['BYTES'] = ['GB/s', 'STD DEV', 'WORKGROUPS', 'THREADS', 'BATCH SIZE']
+        df['BYTES'] = ['GB/s', 'STD_DEV', 'WORKGROUPS', 'THREADS', 'BATCH SIZE']
         for el in max_throughput_results:
             temp = [str(i) for i in el]
             del temp[0]
@@ -252,14 +251,12 @@ def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _max_b
         table.scale(1, 1)  # Scale the table to make it readable
         fig4.savefig('pd-folder/' + _label + '.png',dpi=300)
 
-        
-            
-#run_benchmark(False, max_size, 0, 'blue', "./main-bench-path/bp-prefix-scan.run", 5,  1, 5, 64, "AMD XT 7900 - bp & par")
-run_benchmark(False, max_size, 0, 'blue', "./main-bench-path/bp-prefix-scan.run", 5,  1, 2, 32, "AMD XT 7900 - bp & par", 4)
-run_benchmark(False, max_size, 0, 'green', "./main-bench-path/prefix-scan.run", 5, 1, 5, 32, "AMD XT 7900 - no bp & par", 4)
-run_benchmark(True, max_size, 0, 'black', "./main-bench-path/blit.run", 5, 1, 3, 32, "AMD XT 7900 - blit", 1)
-#run_benchmark(False, max_size, 0, 'orange', "./main-bench-path/bp-prefix-scan.run", 5, 0, 5, 64, "AMD XT 7900 - bp & no par", 1)
-#run_benchmark(False, max_size, 0, 'red', "./main-bench-path/prefix-scan.run", 5, 0, 5, 64, "AMD XT 7900 - no bp & no par", 1)
+
+#def run_benchmark(_blit, _max_size, _device, _color, _executable, _n, _p, _min_batch_size, _max_batch_size, _min_threads, _label):
+run_benchmark(_blit=False, _max_size=max_size, _device=1, _color='red', _executable="./build/prefix-scan.run", _n=5, _p=1, _min_batch_size=1, _max_batch_size=8, _min_threads=32, _label="Nvidia GTX 4070 par lookback")
+run_benchmark(_blit=False, _max_size=max_size, _device=1, _color='orange', _executable="./build/prefix-scan.run", _n=5, _p=0, _min_batch_size=1, _max_batch_size=8, _min_threads=32, _label="Nvidia GTX 4070 no par lookback")
+#run_benchmark(_blit=True, _max_size=max_size, _device=1, _color='blue', _executable="./build/blit.run", _n=5, _p=1, _min_batch_size=1, _max_batch_size=8, _min_threads=32, _label="blit")
+
 
 
 # Plot settings
@@ -273,7 +270,8 @@ handles, labels = ax1.get_legend_handles_labels()
 handles = [h[0] for h in handles]
 ax1.legend(handles, labels, loc='upper left', numpoints=1)
 
-fig.savefig("plots/exhaustive-bench-complete.png")
+#fig.savefig("plots/exhaustive-bench-complete.png")
+fig.savefig("plots/par-blit-nopar-4070-test.png")
 
 for i in error_commands:
     print(i)    
@@ -283,5 +281,4 @@ end = time.time()
 print(end - start)
 print("seconds")
 # save data so we cna see if different runs re marginlly different or very different.
-# do this by graphing a scatter plot so you can see all of the  points compared to eahcother 
-
+# do this by graphing a scatter plot so you can see all of the  points compared to eahcother
