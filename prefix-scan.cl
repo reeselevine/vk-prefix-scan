@@ -1,4 +1,4 @@
-#define BATCH_SIZE 64
+#define BATCH_SIZE 8
 
 #define FLG_A 1U
 #define FLG_P 2U
@@ -33,7 +33,6 @@ __kernel void prefix_scan(
   // first thread in each block gets its part by atomically incrementing the global partition variable.
   if (get_local_id(0) == 0) {
     part_id = atomic_fetch_add(partition, 1);
-    //part_id = get_group_id(0);
   }
   //ensure that all threads in the block see the updated part_id
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
@@ -48,9 +47,6 @@ __kernel void prefix_scan(
   scan_type = debug[0];
   p = debug[1];
 
-
-
-
   // each thread works on items indexed on its partition and position in the block
   uint my_id = part_id * get_local_size(0) * BATCH_SIZE + get_local_id(0) * BATCH_SIZE;
 
@@ -62,8 +58,6 @@ __kernel void prefix_scan(
     sum += in[my_id + i];
     values[i] = sum;
   }
-
-
 
   switch (scan_type)
   {
@@ -174,7 +168,6 @@ __kernel void prefix_scan(
     if (part_id == 0) {
       prefix_states[part_id].inclusive_prefix = scratch[get_local_size(0) - 1];
       atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_release);
-      //debug[0] = ((FLG_P << 30) | (scratch[get_local_size(0) - 1] & MASK));
     }
     // might as well initialize exclusive prefix here too
     exclusive_prefix = 0;
@@ -184,15 +177,12 @@ __kernel void prefix_scan(
   if (p){
   // lookback phase (parallelized), all threads in first subgroup participate
   if (part_id != 0 && get_sub_group_id() == 0) {
-    
     // ensure all threads in the subgroup see exclusive_prefix initialized
     sub_group_barrier(CLK_LOCAL_MEM_FENCE);
     int lookback_id = calc_lookback_id((int)part_id, get_sub_group_size() - get_sub_group_local_id());
     bool done = false;
-    //uint k = 0;
     // spin and lookback until full prefix is set
     while (!done) {
-
       uint flag;
       uint agg;
       if (lookback_id >= 0) {
@@ -204,15 +194,10 @@ __kernel void prefix_scan(
         flag = 2;
       }
       sub_group_barrier(CLK_LOCAL_MEM_FENCE);
-      
-
       // check if all threads see a valid get_local_id(0) prefix
       if (sub_group_all(flag)) {
-
         uint local_prefix = 0;
         // check if any thread has an inclusive prefix
-
-
         if (sub_group_any(flag == FLG_P)) {
           // we will terminate after this iteration
           done = true;
