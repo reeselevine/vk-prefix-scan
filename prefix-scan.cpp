@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
 	debug.store(hostDebug.data(), sizeof(uint)*2);
 
 	auto out = easyvk::Buffer(device, sizeBytes, true);
-	auto prefixStates = easyvk::Buffer(device, numWorkgroups*2*sizeof(uint), true);
+	auto prefixStates = easyvk::Buffer(device, numWorkgroups*1*sizeof(uint), true);
 	auto partitionCtr = easyvk::Buffer(device, sizeof(uint), true);
 	
 

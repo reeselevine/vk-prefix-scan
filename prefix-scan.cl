@@ -7,7 +7,6 @@
 
 
 typedef struct PrefixState {
-  uint inclusive_prefix;
   atomic_uint flagg;
 } PrefixState;
 
@@ -166,7 +165,6 @@ __kernel void prefix_scan(
     
     // first block does not need to look back
     if (part_id == 0) {
-      prefix_states[part_id].inclusive_prefix = scratch[get_local_size(0) - 1];
       atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_release);
     }
     // might as well initialize exclusive prefix here too
@@ -207,7 +205,7 @@ __kernel void prefix_scan(
           uint max_inclusive = sub_group_reduce_max(inclusive);
           // highest thread with inclusive prefix loads it
           if (get_sub_group_local_id() == max_inclusive) {
-            local_prefix = lookback_id < 0 ? 0 : prefix_states[lookback_id].inclusive_prefix;
+            local_prefix = lookback_id < 0 ? 0 : agg;
           // threads with higher ids load exclusive prefix
           } else if (max_inclusive < get_sub_group_local_id()) {
             local_prefix = agg;
@@ -229,10 +227,7 @@ __kernel void prefix_scan(
 
     // finally last thread in subgroup updates this workgroup's prefix/flag
     if (get_sub_group_local_id() == get_sub_group_size() - 1) {
-      prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
-
-      // this part_id no longer needs agg so just a flag is necesarry
-      atomic_store_explicit(&prefix_states[part_id].flagg, FLG_P << ANTI_MASK, memory_order_release);
+      atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | ((exclusive_prefix + scratch[get_local_size(0) - 1]) & MASK), memory_order_release);
     }
   }
   }else{
@@ -246,15 +241,14 @@ __kernel void prefix_scan(
       uint flag = flagg >> ANTI_MASK;
 
       if (flag == FLG_P) {
-        exclusive_prefix += prefix_states[lookback_id].inclusive_prefix; 
+        exclusive_prefix += agg; 
         break;
       } else if (flag == FLG_A) {
         exclusive_prefix += agg;
         lookback_id -= 1;
       }
     }
-    prefix_states[part_id].inclusive_prefix = exclusive_prefix + scratch[get_local_size(0) - 1];
-    atomic_store_explicit(&prefix_states[part_id].flagg, FLG_P << ANTI_MASK, memory_order_release);
+    atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | ((exclusive_prefix + scratch[get_local_size(0) - 1]) & MASK), memory_order_release);
   }
   }
   // ensure all threads in the block see exclusive_prefix  
