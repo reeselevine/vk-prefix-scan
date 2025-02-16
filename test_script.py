@@ -1,0 +1,153 @@
+import os
+import subprocess
+import re
+import statistics
+import matplotlib.pyplot as plt
+import math
+#import pandas as pd
+import time
+#start = time.time()
+
+error_commands = [('Begin:', None)]
+fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
+# Regex patterns to extract throughput and error
+throughput_pattern = re.compile(r'Throughput:\s*(\d+(\.\d+)?)')
+error_pattern = re.compile(r'debug: (1|0)')
+
+
+
+
+min_size = 10
+max_size = 25
+min_bs = 0
+max_bs = 3
+min_threads = 6
+max_threads = 10
+min_workgroups = 5
+max_workgroups = max_size - min_threads
+
+# dict where keys r powers of 2 and values are dicts
+best_combinations = [dict() for _ in range(10, max_size + 1)]
+
+def run_command(command):
+    #print(command)
+    result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, text=True)
+    return result.stdout
+
+# Function to calculate statistics
+def calculate_statistics(output):
+    throughput_data = []
+    error_data = []
+
+    for line in output.splitlines():
+        match = throughput_pattern.search(line)
+        error_match = error_pattern.search(line)
+        if match:
+            throughput = float(match.group(1))
+            throughput_data.append(throughput)
+        if error_match:
+            error = int(error_match.group(1))
+            error_data.append(error)
+
+    if throughput_data:
+        if len(throughput_data) != 1:
+            avg_throughput = statistics.mean(throughput_data)
+            var_throughput = statistics.variance(throughput_data)
+        else:
+            avg_throughput = throughput_data[0]
+            var_throughput = 0
+    else:
+        avg_throughput = var_throughput = 0.0
+
+    if error_data:
+        error_rate = 1 - sum(error_data) / len(error_data)
+    else:
+        error_rate = 0.0
+
+    return avg_throughput, var_throughput, error_rate
+
+
+def main():
+    run(_blit=False, _device=1, _executable="build/blit.run", _n=1, _p=1)
+    for entry in best_combinations:
+        print(entry)
+
+#_blit, _device, _color, _executable, _n, _p, _label
+def run(_blit, _device, _executable, _n, _p):
+    input_size = min_size
+    last_max = 0
+    sleeps = False
+    while input_size <= max_size:
+        max_throughput = 0
+        max_var_throughput = 0
+        max_error_rate = 0
+        max_command = ""
+        # start # - input over all params
+        print("2 ^ " + str(input_size))
+        for alg in ['a', 'c']:
+            for bs in (2**p for p in range(min_bs, max_bs + 1)):
+                for t in (2**p for p in range(min_threads, max_threads + 1)):
+                    for w in (2**p for p in range(min_workgroups, max_workgroups + 1)):
+                        # end # - input over all params
+                        if bs * t * w == 2 ** input_size:
+                            print(f"-w {w} -t {t} -s '{bs}' -b '{alg}' ")
+                            alt = 1
+                            output = ""
+                            for _ in range(_n):
+                                if not _blit:
+                                    command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
+                                else:
+                                    command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
+                                if sleeps == True:
+                                    time.sleep(2)
+                                output += run_command(command)
+                                alt += 1
+
+                            avg_throughput, var_throughput, error_rate = calculate_statistics(output)
+                            if avg_throughput > max_throughput:
+                               max_throughput = avg_throughput
+                               max_var_throughput = var_throughput
+                               max_error_rate = error_rate
+                               max_command = command
+                            if error_rate > 0:
+                                error_commands.append(command)
+
+        best_combinations[input_size - min_size]["throughput"] = round(max_throughput)
+        best_combinations[input_size - min_size]["var_throughput"] = round(max_var_throughput)
+        best_combinations[input_size - min_size]["error_rate"] = max_error_rate
+        best_combinations[input_size - min_size]["command"] = max_command
+                            
+        # if last_max > max_throughput:
+        #     sleeps = True
+        #     for _ in range(0, 10):
+        #         print("WE GOING TO SLEEP BOY")
+        # else:
+        #     input_size = input_size + 1
+        #     last_max = max_throughput
+        #     sleeps = False
+        input_size = input_size + 1
+main()
+
+input_sizes = [input_size for input_size in (2**p for p in range(min_size, max_size + 1))]
+throughputs = [input_size["throughput"] for input_size in best_combinations]
+std_values = [input_size["var_throughput"] for input_size in best_combinations]
+
+
+ax1.errorbar(input_sizes, throughputs, yerr=std_values, capsize=5, marker='o', linestyle='-', color="red", label="prefix-sum")
+
+ax1.set_xscale('log', base=2)
+# Plot settings
+fig.suptitle("Best throughput parameterized on w, t and reduction type")
+ax1.set_xlabel("workgroups * threads * batch_size")
+ax1.set_ylabel("Throughput")
+ax1.grid(False)
+ax1.set_xscale('log', base=2)
+# Configure and display legend without error bars
+handles, labels = ax1.get_legend_handles_labels()
+handles = [h[0] for h in handles]
+ax1.legend(handles, labels, loc='upper left', numpoints=1)
+
+fig.savefig('blit-new.png')
+
+
+                    
