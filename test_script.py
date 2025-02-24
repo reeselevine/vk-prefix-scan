@@ -16,18 +16,20 @@ error_pattern = re.compile(r'debug: (1|0)')
 
 
 
-
-min_size = 10
-max_size = 25
-min_bs = 0
+file_name = "just-blit1"
+plot_name = "blit memory loads (1-8]"
+x_label = "workgroups * threads * batch_size"
+y_label = "Throughput"
+min_size = 12
+max_size = 15
+min_bs = 1
 max_bs = 3
-min_threads = 6
+min_threads = 5
 max_threads = 10
 min_workgroups = 5
 max_workgroups = max_size - min_threads
 
-# dict where keys r powers of 2 and values are dicts
-best_combinations = [dict() for _ in range(10, max_size + 1)]
+
 
 def run_command(command):
     #print(command)
@@ -68,12 +70,13 @@ def calculate_statistics(output):
 
 
 def main():
-    run(_blit=False, _device=1, _executable="build/blit.run", _n=1, _p=1)
-    for entry in best_combinations:
-        print(entry)
+    #run(_blit=False, _device=1, _executable="build/prefix-scan.run", _n=2, _p=1, _label="Nvidia GTX 4070 par lookback", _color="red")
+    #run(_blit=False, _device=1, _executable="build/prefix-scan.run", _n=2, _p=0, _label="Nvidia GTX 4070 no par lookback", _color="orange")
+    run(_blit=True, _device=1, _executable="build/blit.run", _n=16, _p=0, _label="blit", _color="blue", _warmup=5)
 
-#_blit, _device, _color, _executable, _n, _p, _label
-def run(_blit, _device, _executable, _n, _p):
+def run(_blit, _device, _executable, _n, _p, _label, _color, _warmup):
+    # dict where keys r powers of 2 and values are dicts
+    best_combinations = [dict() for _ in range(10, max_size + 1)]
     input_size = min_size
     last_max = 0
     sleeps = False
@@ -90,14 +93,29 @@ def run(_blit, _device, _executable, _n, _p):
                     for w in (2**p for p in range(min_workgroups, max_workgroups + 1)):
                         # end # - input over all params
                         if bs * t * w == 2 ** input_size:
-                            print(f"-w {w} -t {t} -s '{bs}' -b '{alg}' ")
                             alt = 1
                             output = ""
-                            for _ in range(_n):
+                            warmup_output = ""
+
+                            for i in range(_warmup):
                                 if not _blit:
                                     command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
+                                    print("Warmup", i, f": -w {w} -t {t} -s '{bs}' -b '{alg}' ")
                                 else:
                                     command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
+                                    print("Warmup", i, f": -w {w} -t {t} -s '{bs}' ")
+                                warmup_output += run_command(command)
+                                alt += 1
+                        
+                            alt = 1
+
+                            for i in range(_n):
+                                if not _blit:
+                                    command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
+                                    print(f"-w {w} -t {t} -s '{bs}' -b '{alg}' ")
+                                else:
+                                    command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
+                                    print(f"-w {w} -t {t} -s '{bs}' ")
                                 if sleeps == True:
                                     time.sleep(2)
                                 output += run_command(command)
@@ -126,20 +144,26 @@ def run(_blit, _device, _executable, _n, _p):
         #     last_max = max_throughput
         #     sleeps = False
         input_size = input_size + 1
+    input_sizes = [input_size for input_size in (2**p for p in range(min_size, max_size + 1))]
+    throughputs = [input_size["throughput"] for input_size in best_combinations]
+    std_values = [input_size["var_throughput"] for input_size in best_combinations]
+    ax1.errorbar(input_sizes, throughputs, yerr=std_values, capsize=5, marker='o', linestyle='-', color=_color, label=_label)
+    with open(file_name + '.txt', 'a') as output:
+        output.write(_label + "\n\n")
+        for entry in best_combinations:
+            output.write(str(entry) + "\n")
+        output.write("\n\n")
+
+
 main()
 
-input_sizes = [input_size for input_size in (2**p for p in range(min_size, max_size + 1))]
-throughputs = [input_size["throughput"] for input_size in best_combinations]
-std_values = [input_size["var_throughput"] for input_size in best_combinations]
 
-
-ax1.errorbar(input_sizes, throughputs, yerr=std_values, capsize=5, marker='o', linestyle='-', color="red", label="prefix-sum")
 
 ax1.set_xscale('log', base=2)
 # Plot settings
-fig.suptitle("Best throughput parameterized on w, t and reduction type")
-ax1.set_xlabel("workgroups * threads * batch_size")
-ax1.set_ylabel("Throughput")
+fig.suptitle(plot_name)
+ax1.set_xlabel(x_label)
+ax1.set_ylabel(y_label)
 ax1.grid(False)
 ax1.set_xscale('log', base=2)
 # Configure and display legend without error bars
@@ -147,7 +171,14 @@ handles, labels = ax1.get_legend_handles_labels()
 handles = [h[0] for h in handles]
 ax1.legend(handles, labels, loc='upper left', numpoints=1)
 
-fig.savefig('blit-new.png')
+fig.savefig(file_name + '.png')
+
+
+with open(file_name + '.txt', 'a') as output:
+    output.write("\n\nerror inputs:\n\n" )
+    for entry in error_commands:
+        output.write(str(entry) + "\n")
+
 
 
                     
