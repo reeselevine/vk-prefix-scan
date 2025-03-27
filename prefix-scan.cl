@@ -6,26 +6,11 @@
 #define MASK ~(3 << ANTI_MASK)
 
 
-typedef struct PrefixState {
-  atomic_uint flagg;
-} PrefixState;
-
-int calc_lookback_id(int part_id, int lookback_amt) {
-  if (lookback_amt > part_id) {
-    if (get_sub_group_local_id() == get_sub_group_size()) {
-      return 0;
-    }
-    return -1;
-  } else {
-    return part_id - lookback_amt;
-  }
-}
-
 __kernel void prefix_scan(
   __global uint *in, 
   __global uint *out,
   __local uint *scratch,
-  __global PrefixState *prefix_states,
+  __global atomic_uint *prefix_states,
   __global atomic_uint *partition,
   __global uint * debug) {
   __local uint part_id;
@@ -161,11 +146,11 @@ __kernel void prefix_scan(
   // one thread in each block updates the aggregate/flag
   if (get_local_id(0) == 0) { // This has to be this rather than get_local_id == 0 bcz exprfx mst be synced by subbarrier in lookback
     
-    atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_A << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_release);
+    atomic_store_explicit(&prefix_states[part_id], (FLG_A << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_relaxed);
     
     // first block does not need to look back
     if (part_id == 0) {
-      atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_release);
+      atomic_store_explicit(&prefix_states[part_id], (FLG_P << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_relaxed);
     }
     // might as well initialize exclusive prefix here too
     exclusive_prefix = 0;
@@ -176,22 +161,17 @@ __kernel void prefix_scan(
   // lookback phase (parallelized), all threads in first subgroup participate
   if (part_id != 0 && get_sub_group_id() == 0) {
     // ensure all threads in the subgroup see exclusive_prefix initialized
-    sub_group_barrier(CLK_LOCAL_MEM_FENCE);
-    int lookback_id = calc_lookback_id((int)part_id, get_sub_group_size() - get_sub_group_local_id());
+    int lookback_id = part_id - (get_sub_group_size() - get_sub_group_local_id());
     bool done = false;
+    uint flag = FLG_P;
+    uint agg = 0;
     // spin and lookback until full prefix is set
     while (!done) {
-      uint flag;
-      uint agg;
       if (lookback_id >= 0) {
-         uint flagg = atomic_load_explicit(&prefix_states[lookback_id].flagg, memory_order_acquire);
+         uint flagg = atomic_load_explicit(&prefix_states[lookback_id], memory_order_relaxed);
          agg = flagg & 0x3FFFFFFF;
          flag = flagg >> ANTI_MASK; // can also just give flag as 1 if lookbackid in this thread is -1 
-      }else{
-        agg = 0;
-        flag = 2;
       }
-      sub_group_barrier(CLK_LOCAL_MEM_FENCE);
       // check if all threads see a valid get_local_id(0) prefix
       if (sub_group_all(flag)) {
         uint local_prefix = 0;
@@ -203,18 +183,15 @@ __kernel void prefix_scan(
           uint inclusive = flag == FLG_P ? get_sub_group_local_id() : 0;
           // broadcast to  all threads in the subgroup the highest thread with inclusive prefix
           uint max_inclusive = sub_group_reduce_max(inclusive);
-          // highest thread with inclusive prefix loads it
-          if (get_sub_group_local_id() == max_inclusive) {
-            local_prefix = lookback_id < 0 ? 0 : agg;
-          // threads with higher ids load exclusive prefix
-          } else if (max_inclusive < get_sub_group_local_id()) {
+          // load thread with highest FLG_P and higher prefixes
+          if (max_inclusive <= get_sub_group_local_id()) {
             local_prefix = agg;
           }
         // if no thread has inclusive prefix, all threads load exclusive prefix
         } else {
           // every thread looks back another partition
           local_prefix = agg;
-          lookback_id = calc_lookback_id(lookback_id, get_sub_group_size());
+          lookback_id = lookback_id - get_sub_group_size();
         }
         uint scanned_prefix = sub_group_scan_inclusive_add(local_prefix);
 
@@ -227,8 +204,10 @@ __kernel void prefix_scan(
 
     // finally last thread in subgroup updates this workgroup's prefix/flag
     if (get_sub_group_local_id() == get_sub_group_size() - 1) {
-      atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | ((exclusive_prefix + scratch[get_local_size(0) - 1]) & MASK), memory_order_release);
+      atomic_store_explicit(&prefix_states[part_id], (FLG_P << ANTI_MASK) | ((exclusive_prefix + scratch[get_local_size(0) - 1]) & MASK), memory_order_relaxed);
     }
+    //sub_group_barrier(CLK_LOCAL_MEM_FENCE);
+    // dont need subgroup barrier because exlcusive_prefix is accessed by the same thread of the same subgroup everytime 
   }
   }else{
   // lookback phase
@@ -236,7 +215,7 @@ __kernel void prefix_scan(
     int lookback_id = part_id - 1;
     // spin and lookback until full prefix is set
     while (lookback_id >= 0) {
-      uint flagg = atomic_load_explicit(&prefix_states[lookback_id].flagg, memory_order_acquire);     
+      uint flagg = atomic_load_explicit(&prefix_states[lookback_id], memory_order_relaxed);     
       uint agg = flagg & 0x3FFFFFFF;  
       uint flag = flagg >> ANTI_MASK;
 
@@ -248,7 +227,7 @@ __kernel void prefix_scan(
         lookback_id -= 1;
       }
     }
-    atomic_store_explicit(&prefix_states[part_id].flagg, (FLG_P << ANTI_MASK) | ((exclusive_prefix + scratch[get_local_size(0) - 1]) & MASK), memory_order_release);
+    atomic_store_explicit(&prefix_states[part_id], (FLG_P << ANTI_MASK) | ((exclusive_prefix + scratch[get_local_size(0) - 1]) & MASK), memory_order_relaxed);
   }
   }
   // ensure all threads in the block see exclusive_prefix  
