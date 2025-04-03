@@ -74,13 +74,13 @@ int main(int argc, char* argv[]) {
       default:
         abort ();
       }
-    auto size = numWorkgroups * workgroupSize * BATCH_SIZE;
+    auto size = numWorkgroups * workgroupSize * BATCH_SIZE * 4;
 	if (size > 1073741824) {
 		for (int i = 0; i < 100; i++) {
 			std::cout << "OVERFLOW ALERT" << "\n";
 		}
 	}
-	auto sizeBytes = numWorkgroups * workgroupSize * BATCH_SIZE * sizeof(uint);
+	auto sizeBytes = numWorkgroups * workgroupSize * BATCH_SIZE * (sizeof(uint)) * 4;
 	// Initialize instance.
 	auto instance = easyvk::Instance(enableValidationLayers);
 	// Get list of available physical devices.
@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
 	
 	std::vector<uint> hostIn(size, 0);
 	std::vector<uint> hostOut(size, 0);
-	std::vector<uint> hostDebug(2, 0);
+	std::vector<uint> hostDebug(3, 0);
 	std::vector<uint> ref(size, 0);
 
 	//std::iota(std::begin(hostIn), std::end(hostIn), 0); // fill with increasing numbers till end 
@@ -107,8 +107,8 @@ int main(int argc, char* argv[]) {
 	//in.store(hostIn.data(), sizeBytes);
 	in.fill((uint)alt);
 
-	auto debug = easyvk::Buffer(device, sizeof(uint)*2, true);
-	debug.store(hostDebug.data(), sizeof(uint)*2);
+	auto debug = easyvk::Buffer(device, sizeof(uint)*3, true);
+	debug.store(hostDebug.data(), sizeof(uint)*3);
 
 	auto out = easyvk::Buffer(device, sizeBytes, true);
 	auto prefixStates = easyvk::Buffer(device, numWorkgroups*1*sizeof(uint), true);
@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
 	program.initialize("prefix_scan");
 	float time = program.runWithDispatchTiming();
 	out.load(hostOut.data(), sizeBytes);
-	debug.load(hostDebug.data(), sizeof(uint) * 2);
+	debug.load(hostDebug.data(), sizeof(uint) * 3);
 
 	
 	if (alt == 1) {
@@ -164,7 +164,7 @@ int main(int argc, char* argv[]) {
 	}else{
 		hostDebug[0] = hostOut[size - 1] == size * alt ? 1 : 0;
 	}
-	//std::cout << "debug: " << hostDebug[0] << "\n";
+	
 	if (checkResults) {
 		computeReferencePrefixSum(ref.data(), size, false, alt);
 		for (int i = 0; i < size; i++) {
@@ -173,7 +173,7 @@ int main(int argc, char* argv[]) {
 			//assert(hostOut[i] == ref[i]);
 		}
 	}
-
+	std::cout << "debug check: " << hostDebug[2] << "\n";
 	
 
 	std::cout << "debug: " << hostDebug[0] << "\n";
@@ -187,6 +187,7 @@ int main(int argc, char* argv[]) {
 	out.teardown();
 	prefixStates.teardown();
 	partitionCtr.teardown();
+	debug.teardown();
 	device.teardown();
 	instance.teardown();
 	return 0;

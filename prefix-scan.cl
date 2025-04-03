@@ -1,14 +1,21 @@
-#define BATCH_SIZE 8
+#define BATCH_SIZE 32
 
 #define FLG_A 1U
 #define FLG_P 2U
 #define ANTI_MASK 30
 #define MASK ~(3 << ANTI_MASK)
 
+uint4 prefix_sum_inclusive(uint4 v) {
+    v.y += v.x;                  // v = ( v.x, v.x+v.y, v.z, v.w )
+    v.z += v.y;                  // v = ( v.x, v.x+v.y, v.x+v.y+v.z, v.w )
+    v.w += v.z;                  // v = ( v.x, v.x+v.y, v.x+v.y+v.z, v.x+v.y+v.z+v.w )
+    return v;
+}
+
 
 __kernel void prefix_scan(
-  __global uint *in, 
-  __global uint *out,
+  __global uint4 *in, 
+  __global uint4 *out,
   __local uint *scratch,
   __global atomic_uint *prefix_states,
   __global atomic_uint *partition,
@@ -27,28 +34,33 @@ __kernel void prefix_scan(
 
   int scan_type;
   int p;
-  
+
   scan_type = debug[0];
   p = debug[1];
 
   // each thread works on items indexed on its partition and position in the block
+
   uint my_id = part_id * get_local_size(0) * BATCH_SIZE + get_local_id(0) * BATCH_SIZE;
+  //uint id = part_id * get_local_size(0) + get_local_id(0);  
+
 
   // load work into private memory and compute thread local prefix sum
-  uint values[BATCH_SIZE];
-  uint sum = in[my_id];
+  uint4 values[BATCH_SIZE];
+
+  uint4 sum = prefix_sum_inclusive(in[my_id]);
   values[0] = sum;
   for (uint i = 1; i < BATCH_SIZE; i++) {
-    sum += in[my_id + i];
+    sum = prefix_sum_inclusive(in[my_id + i]) + sum.w;
     values[i] = sum;
   }
+
 
   switch (scan_type)
   {
   case 'a':
     {
       // store inclusive thread prefix to local memory so that a block wide prefix can be computed
-      scratch[get_local_id(0)] = sum;
+      scratch[get_local_id(0)] = sum[3];
       work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
       // perform raking exclusive sum, where only threads in the first subgroup do any work
@@ -66,6 +78,7 @@ __kernel void prefix_scan(
         }
         // synchronize scratch memory across threads in subgroup 
         sub_group_barrier(CLK_LOCAL_MEM_FENCE);
+        //debug[2] = scratch[3];
         
       }   
       break;
@@ -73,18 +86,39 @@ __kernel void prefix_scan(
 
   case 'b':
     {
-      uint scan = sub_group_scan_inclusive_add(sum);
+    // copy values to shared memory
+    
+    // scratch[get_local_id(0)] = sum[3];
+    // work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
-      if ( (get_local_id(0) % 32) == (32 - 1) ) {
-        scratch[get_local_id(0) / 32] = scan;
-      } 
+    // //  first warp reduces all values
+    // if (get_sub_group_id() == 0){
 
-      work_group_barrier(CLK_LOCAL_MEM_FENCE);
-      if (get_local_id(0) < 32) {
-        scratch[get_local_id(0)] = sub_group_scan_exclusive_add(scratch[get_local_id(0)]);
-      }
-      work_group_barrier(CLK_LOCAL_MEM_FENCE);
-      scratch[get_local_id(0)] = scan + scratch[get_local_id(0)/ 32];
+
+    //     //  interleaved addressing to reduce values into 0...31
+    //     for (ushort i = 1; i < get_local_size(0) / get_sub_group_size(); i++){
+    //         scratch[get_local_id(0)] += scratch[get_local_id(0) + get_sub_group_size() * i];
+    //     }
+
+    //     // Perform the reduction using sub_group_reduce_add, which is like a shuffle-based reduction
+    //     uint local_prefix = sub_group_reduce_add(scratch[get_local_id(0)]);
+    
+    //     // Optionally, broadcast the reduced value to all threads in the subgroup (if needed)
+    //     local_prefix = sub_group_broadcast(local_prefix, 0);
+        
+        
+    //     // raking write of results to shared memory
+    //     for (short i = 0; i < BLOCK_SIZE / 32; i++){
+    //         shared[lid + i * 32] = value;
+    //     }
+
+    //     debug[2] = scratch[0];
+    // }
+    // //work_group_barrier(CLK_LOCAL_MEM_FENCE);
+    // // if (lid % 32 == 0){
+    // //   value = shared[lid / 32];
+    // //   value = simd_broadcast_first(value);
+    // // }
       break;
     }
     
@@ -92,7 +126,7 @@ __kernel void prefix_scan(
     {
       // load input into shared memory 
       uint BLOCK_SIZE = get_local_size(0);
-      scratch[get_local_id(0)] = sum;
+      scratch[get_local_id(0)] = sum[3];
       
       work_group_barrier(CLK_LOCAL_MEM_FENCE);
       // build the sum in place up the tree
@@ -100,7 +134,16 @@ __kernel void prefix_scan(
       const ushort bi = 2 * get_local_id(0) + 2;
 
       // build the sum in place up the tree
-      if (BLOCK_SIZE >=    2) {if (get_local_id(0) < (BLOCK_SIZE >>  1) ) {scratch[   1 * bi - 1] += scratch[   1 * ai - 1];} if ((BLOCK_SIZE >>  0) > 32) work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=    2) {
+        
+        if (get_local_id(0) < (BLOCK_SIZE >>  1) ) {
+          scratch[   1 * bi - 1] += scratch[   1 * ai - 1];
+        } 
+        
+        if ((BLOCK_SIZE >>  0) > 32) { 
+          work_group_barrier(CLK_LOCAL_MEM_FENCE);
+        } 
+      }
       if (BLOCK_SIZE >=    4) {if (get_local_id(0) < (BLOCK_SIZE >>  2) ) {scratch[   2 * bi - 1] += scratch[   2 * ai - 1];} if ((BLOCK_SIZE >>  1) > 32) work_group_barrier(CLK_LOCAL_MEM_FENCE); }
       if (BLOCK_SIZE >=    8) {if (get_local_id(0) < (BLOCK_SIZE >>  3) ) {scratch[   4 * bi - 1] += scratch[   4 * ai - 1];} if ((BLOCK_SIZE >>  2) > 32) work_group_barrier(CLK_LOCAL_MEM_FENCE); }
       if (BLOCK_SIZE >=   16) {if (get_local_id(0) < (BLOCK_SIZE >>  4) ) {scratch[   8 * bi - 1] += scratch[   8 * ai - 1];} if ((BLOCK_SIZE >>  3) > 32) work_group_barrier(CLK_LOCAL_MEM_FENCE); }
@@ -207,7 +250,7 @@ __kernel void prefix_scan(
       atomic_store_explicit(&prefix_states[part_id], (FLG_P << ANTI_MASK) | ((exclusive_prefix + scratch[get_local_size(0) - 1]) & MASK), memory_order_relaxed);
     }
     //sub_group_barrier(CLK_LOCAL_MEM_FENCE);
-    // dont need subgroup barrier because exlcusive_prefix is accessed by the same thread of the same subgroup everytime 
+    // dont need subgroup barrier because exlcusive_prefix is local to the workgroup and is always accessed by the same thread of the workgroup everytime 
   }
   }else{
   // lookback phase
@@ -241,9 +284,21 @@ __kernel void prefix_scan(
 
   }
 
+  // values is an int4 but you can d0 this still
   for (uint i = 0; i < BATCH_SIZE; i++) {
     out[my_id + i] = values[i] + total_exclusive_prefix;
   }
 
-
 }
+
+
+
+
+
+
+
+
+
+
+
+
