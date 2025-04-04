@@ -12,6 +12,26 @@ uint4 prefix_sum_inclusive(uint4 v) {
     return v;
 }
 
+inline void prefix_sum_inclusive_batch(uint4 *values) {
+    // First, prefix scan the first uint4 element
+    values[0].y += values[0].x;
+    values[0].z += values[0].y;
+    values[0].w += values[0].z;
+
+    // Then, for remaining elements
+    for (uint i = 1; i < BATCH_SIZE; i++) {
+        // Add last component from previous
+        uint prev = values[i - 1].w;
+
+        values[i].x += prev;
+        values[i].y += values[i].x;
+        values[i].z += values[i].y;
+        values[i].w += values[i].z;
+    }
+}
+
+
+
 
 __kernel void prefix_scan(
   __global uint4 *in, 
@@ -39,28 +59,20 @@ __kernel void prefix_scan(
   p = debug[1];
 
   // each thread works on items indexed on its partition and position in the block
-
   uint my_id = part_id * get_local_size(0) * BATCH_SIZE + get_local_id(0) * BATCH_SIZE;
-  //uint id = part_id * get_local_size(0) + get_local_id(0);  
 
-
-  // load work into private memory and compute thread local prefix sum
   uint4 values[BATCH_SIZE];
-
-  uint4 sum = prefix_sum_inclusive(in[my_id]);
-  values[0] = sum;
-  for (uint i = 1; i < BATCH_SIZE; i++) {
-    sum = prefix_sum_inclusive(in[my_id + i]) + sum.w;
-    values[i] = sum;
+  for (uint i = 0; i < BATCH_SIZE; i++) {
+      values[i] = in[my_id + i];
   }
-
+  prefix_sum_inclusive_batch(values);
 
   switch (scan_type)
   {
   case 'a':
     {
       // store inclusive thread prefix to local memory so that a block wide prefix can be computed
-      scratch[get_local_id(0)] = sum[3];
+      scratch[get_local_id(0)] = values[BATCH_SIZE - 1].w;
       work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
       // perform raking exclusive sum, where only threads in the first subgroup do any work
@@ -77,7 +89,7 @@ __kernel void prefix_scan(
           scratch[i] += prefix;
         }
         // synchronize scratch memory across threads in subgroup 
-        sub_group_barrier(CLK_LOCAL_MEM_FENCE);
+        //sub_group_barrier(CLK_LOCAL_MEM_FENCE);
         //debug[2] = scratch[3];
         
       }   
@@ -126,7 +138,7 @@ __kernel void prefix_scan(
     {
       // load input into shared memory 
       uint BLOCK_SIZE = get_local_size(0);
-      scratch[get_local_id(0)] = sum[3];
+      scratch[get_local_id(0)] = values[BATCH_SIZE - 1].w;
       
       work_group_barrier(CLK_LOCAL_MEM_FENCE);
       // build the sum in place up the tree
@@ -187,7 +199,7 @@ __kernel void prefix_scan(
 
   work_group_barrier(CLK_LOCAL_MEM_FENCE);
   // one thread in each block updates the aggregate/flag
-  if (get_local_id(0) == 0) { // This has to be this rather than get_local_id == 0 bcz exprfx mst be synced by subbarrier in lookback
+  if (get_sub_group_id() == 0 && get_sub_group_local_id() == 0) {
     
     atomic_store_explicit(&prefix_states[part_id], (FLG_A << ANTI_MASK) | (scratch[get_local_size(0) - 1] & MASK), memory_order_relaxed);
     
@@ -230,6 +242,7 @@ __kernel void prefix_scan(
           if (max_inclusive <= get_sub_group_local_id()) {
             local_prefix = agg;
           }
+          //local_prefix = agg & -(max_inclusive <= get_sub_group_local_id());
         // if no thread has inclusive prefix, all threads load exclusive prefix
         } else {
           // every thread looks back another partition
