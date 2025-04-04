@@ -10,30 +10,33 @@ import time
 
 error_commands = [('Begin:', None)]
 fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
+#fig, ax2 = plt.subplots(figsize=(10, 6))
 # Regex patterns to extract throughput and error
 throughput_pattern = re.compile(r'Throughput:\s*(\d+(\.\d+)?)')
 error_pattern = re.compile(r'debug: (1|0)')
 
 
 
-file_name = "just-blit1"
-plot_name = "blit memory loads (1-8]"
+file_name = "batch-vec-loads-no-branch"
+plot_name = "Vulkan prefix-sum vec loads"
 x_label = "workgroups * threads * batch_size"
 y_label = "Throughput"
 min_size = 12
-max_size = 15
-min_bs = 1
-max_bs = 3
+max_size = 26
+min_bs = 0
+max_bs = 2
 min_threads = 5
 max_threads = 10
 min_workgroups = 5
 max_workgroups = max_size - min_threads
+throughputs_ = [list() for _ in range(10, max_size - 1)]
 
 
 
 def run_command(command):
     #print(command)
     result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, text=True)
+    #print(result)
     return result.stdout
 
 # Function to calculate statistics
@@ -47,6 +50,7 @@ def calculate_statistics(output):
         if match:
             throughput = float(match.group(1))
             throughput_data.append(throughput)
+            print(throughput)
         if error_match:
             error = int(error_match.group(1))
             error_data.append(error)
@@ -70,13 +74,13 @@ def calculate_statistics(output):
 
 
 def main():
-    #run(_blit=False, _device=1, _executable="build/prefix-scan.run", _n=2, _p=1, _label="Nvidia GTX 4070 par lookback", _color="red")
-    #run(_blit=False, _device=1, _executable="build/prefix-scan.run", _n=2, _p=0, _label="Nvidia GTX 4070 no par lookback", _color="orange")
-    run(_blit=True, _device=1, _executable="build/blit.run", _n=16, _p=0, _label="blit", _color="blue", _warmup=5)
+    run(_blit=False, _device=1, _executable="build/prefix-scan.run", _n=2, _label="Nvidia GTX 4070 any lookback vec loads", _color="red", _warmup=1)
+    #run(_blit=True, _device=1, _executable="build/blit.run", _n=2, _p=0, _label="Nvidia GTX 4070 blit", _color="orange", _warmup=2)
+    #run(_blit=True, _device=1, _executable="build/blit.run", _n=16, _p=0, _label="blit", _color="blue", _warmup=5)
 
-def run(_blit, _device, _executable, _n, _p, _label, _color, _warmup):
+def run(_blit, _device, _executable, _n, _label, _color, _warmup):
     # dict where keys r powers of 2 and values are dicts
-    best_combinations = [dict() for _ in range(10, max_size + 1)]
+    best_combinations = [dict() for _ in range(10, max_size - 1)]
     input_size = min_size
     last_max = 0
     sleeps = False
@@ -87,48 +91,53 @@ def run(_blit, _device, _executable, _n, _p, _label, _color, _warmup):
         max_command = ""
         # start # - input over all params
         print("2 ^ " + str(input_size))
-        for alg in ['a', 'c']:
-            for bs in (2**p for p in range(min_bs, max_bs + 1)):
-                for t in (2**p for p in range(min_threads, max_threads + 1)):
-                    for w in (2**p for p in range(min_workgroups, max_workgroups + 1)):
-                        # end # - input over all params
-                        if bs * t * w == 2 ** input_size:
-                            alt = 1
-                            output = ""
-                            warmup_output = ""
+        #for alg in ['a', 'c']:
+        for alg in ['a']:
+            for _p in [0, 1]:
+                for bs in (2**p for p in range(min_bs, max_bs + 1)):
+                    for t in (2**p for p in range(min_threads, max_threads + 1)):
+                        for w in (2**p for p in range(min_workgroups, max_workgroups + 1)):
+                            # end # - input over all params
+                            if bs * t * w == 2 ** input_size:
+                                alt = 1
+                                output = ""
+                                warmup_output = ""
 
-                            for i in range(_warmup):
-                                if not _blit:
-                                    command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
-                                    print("Warmup", i, f": -w {w} -t {t} -s '{bs}' -b '{alg}' ")
-                                else:
-                                    command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
-                                    print("Warmup", i, f": -w {w} -t {t} -s '{bs}' ")
-                                warmup_output += run_command(command)
-                                alt += 1
-                        
-                            alt = 1
+                                for i in range(_warmup):
+                                    if not _blit:
+                                        command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
+                                        print("Warmup", i, f": -w {w} -t {t} -s '{bs}' -b '{alg}' ")
+                                    else:
+                                        command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
+                                        print("Warmup", i, f": -w {w} -t {t} -s '{bs}' ")
+                                    warmup_output += run_command(command)
+                                    alt += 1
+                            
+                                alt = 1
 
-                            for i in range(_n):
-                                if not _blit:
-                                    command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
-                                    print(f"-w {w} -t {t} -s '{bs}' -b '{alg}' ")
-                                else:
-                                    command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
-                                    print(f"-w {w} -t {t} -s '{bs}' ")
-                                if sleeps == True:
-                                    time.sleep(2)
-                                output += run_command(command)
-                                alt += 1
+                                for i in range(_n):
+                                    if not _blit:
+                                        command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
+                                        print(f"-w {w} -t {t} -s '{bs}' -b '{alg}' ")
+                                    else:
+                                        command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
+                                        print(f"-w {w} -t {t} -s '{bs}' ")
+                                    if sleeps == True:
+                                        time.sleep(2)
+                                    output += run_command(command)
+                                    alt += 1
 
-                            avg_throughput, var_throughput, error_rate = calculate_statistics(output)
-                            if avg_throughput > max_throughput:
-                               max_throughput = avg_throughput
-                               max_var_throughput = var_throughput
-                               max_error_rate = error_rate
-                               max_command = command
-                            if error_rate > 0:
-                                error_commands.append(command)
+                                avg_throughput, var_throughput, error_rate = calculate_statistics(output)
+                                if avg_throughput > max_throughput:
+                                    max_throughput = avg_throughput
+                                    max_var_throughput = var_throughput
+                                    max_error_rate = error_rate
+                                    max_command = command
+                                if error_rate > 0:
+                                    error_commands.append(command)
+                                throughputs_[input_size - min_size].append(avg_throughput)
+                                for i in throughputs_:
+                                    print(i)
 
         best_combinations[input_size - min_size]["throughput"] = round(max_throughput)
         best_combinations[input_size - min_size]["var_throughput"] = round(max_var_throughput)
@@ -157,6 +166,19 @@ def run(_blit, _device, _executable, _n, _p, _label, _color, _warmup):
 
 main()
 
+
+
+# Create bar chart on ax2
+#choice = 20
+#ax2.bar([i for i in range(0, len(throughputs_[choice - min_size]))], throughputs_[choice - min_size], color='blue')
+
+# # Add title and labels
+# ax2.set_title("Sample Bar Graph")
+# ax2.set_xlabel("Categories")
+# ax2.set_ylabel("Values")
+
+# # Save the plot instead of showing it
+# plt.savefig("bar_graph.png")
 
 
 ax1.set_xscale('log', base=2)
