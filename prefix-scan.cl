@@ -139,6 +139,7 @@ __kernel void prefix_scan(
       // load input into shared memory 
       uint BLOCK_SIZE = get_local_size(0);
       scratch[get_local_id(0)] = values[BATCH_SIZE - 1].w;
+      const ushort sg_size = get_sub_group_size();
       
       work_group_barrier(CLK_LOCAL_MEM_FENCE);
       // build the sum in place up the tree
@@ -152,19 +153,19 @@ __kernel void prefix_scan(
           scratch[   1 * bi - 1] += scratch[   1 * ai - 1];
         } 
         
-        if ((BLOCK_SIZE >>  0) > 32) { 
+        if ((BLOCK_SIZE >>  0) > sg_size) { 
           work_group_barrier(CLK_LOCAL_MEM_FENCE);
         } 
       }
-      if (BLOCK_SIZE >=    4) {if (get_local_id(0) < (BLOCK_SIZE >>  2) ) {scratch[   2 * bi - 1] += scratch[   2 * ai - 1];} if ((BLOCK_SIZE >>  1) > 32) work_group_barrier(CLK_LOCAL_MEM_FENCE); }
-      if (BLOCK_SIZE >=    8) {if (get_local_id(0) < (BLOCK_SIZE >>  3) ) {scratch[   4 * bi - 1] += scratch[   4 * ai - 1];} if ((BLOCK_SIZE >>  2) > 32) work_group_barrier(CLK_LOCAL_MEM_FENCE); }
-      if (BLOCK_SIZE >=   16) {if (get_local_id(0) < (BLOCK_SIZE >>  4) ) {scratch[   8 * bi - 1] += scratch[   8 * ai - 1];} if ((BLOCK_SIZE >>  3) > 32) work_group_barrier(CLK_LOCAL_MEM_FENCE); }
-      if (BLOCK_SIZE >=   32) {if (get_local_id(0) < (BLOCK_SIZE >>  5) ) {scratch[  16 * bi - 1] += scratch[  16 * ai - 1];} if ((BLOCK_SIZE >>  4) > 32) work_group_barrier(CLK_LOCAL_MEM_FENCE); }
-      if (BLOCK_SIZE >=   64) {if (get_local_id(0) < (BLOCK_SIZE >>  6) ) {scratch[  32 * bi - 1] += scratch[  32 * ai - 1];} }
-      if (BLOCK_SIZE >=  128) {if (get_local_id(0) < (BLOCK_SIZE >>  7) ) {scratch[  64 * bi - 1] += scratch[  64 * ai - 1];} }
-      if (BLOCK_SIZE >=  256) {if (get_local_id(0) < (BLOCK_SIZE >>  8) ) {scratch[ 128 * bi - 1] += scratch[ 128 * ai - 1];} }
-      if (BLOCK_SIZE >=  512) {if (get_local_id(0) < (BLOCK_SIZE >>  9) ) {scratch[ 256 * bi - 1] += scratch[ 256 * ai - 1];} }
-      if (BLOCK_SIZE >= 1024) {if (get_local_id(0) < (BLOCK_SIZE >> 10) ) {scratch[ 512 * bi - 1] += scratch[ 512 * ai - 1];} }
+      if (BLOCK_SIZE >=    4) {if (get_local_id(0) < (BLOCK_SIZE >>  2) ) {scratch[   2 * bi - 1] += scratch[   2 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=    8) {if (get_local_id(0) < (BLOCK_SIZE >>  3) ) {scratch[   4 * bi - 1] += scratch[   4 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=   16) {if (get_local_id(0) < (BLOCK_SIZE >>  4) ) {scratch[   8 * bi - 1] += scratch[   8 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=   32) {if (get_local_id(0) < (BLOCK_SIZE >>  5) ) {scratch[  16 * bi - 1] += scratch[  16 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=   64) {if (get_local_id(0) < (BLOCK_SIZE >>  6) ) {scratch[  32 * bi - 1] += scratch[  32 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=  128) {if (get_local_id(0) < (BLOCK_SIZE >>  7) ) {scratch[  64 * bi - 1] += scratch[  64 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=  256) {if (get_local_id(0) < (BLOCK_SIZE >>  8) ) {scratch[ 128 * bi - 1] += scratch[ 128 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=  512) {if (get_local_id(0) < (BLOCK_SIZE >>  9) ) {scratch[ 256 * bi - 1] += scratch[ 256 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >= 1024) {if (get_local_id(0) < (BLOCK_SIZE >> 10) ) {scratch[ 512 * bi - 1] += scratch[ 512 * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
         
       // clear the last element
       if (get_local_id(0) == 0) { inclusive_scan = scratch[BLOCK_SIZE - 1]; scratch[BLOCK_SIZE - 1] = 0; }
@@ -178,17 +179,22 @@ __kernel void prefix_scan(
           }
       }
 
-      if (BLOCK_SIZE >=    4){ if (get_local_id(0) <    2) {scratch[(BLOCK_SIZE >>  2) * bi - 1] += scratch[(BLOCK_SIZE >>  2) * ai - 1]; scratch[(BLOCK_SIZE >>  2) * ai - 1] = scratch[(BLOCK_SIZE >>  2) * bi - 1] - scratch[(BLOCK_SIZE >>  2) * ai - 1];} }
-      if (BLOCK_SIZE >=    8){ if (get_local_id(0) <    4) {scratch[(BLOCK_SIZE >>  3) * bi - 1] += scratch[(BLOCK_SIZE >>  3) * ai - 1]; scratch[(BLOCK_SIZE >>  3) * ai - 1] = scratch[(BLOCK_SIZE >>  3) * bi - 1] - scratch[(BLOCK_SIZE >>  3) * ai - 1];} }
-      if (BLOCK_SIZE >=   16){ if (get_local_id(0) <    8) {scratch[(BLOCK_SIZE >>  4) * bi - 1] += scratch[(BLOCK_SIZE >>  4) * ai - 1]; scratch[(BLOCK_SIZE >>  4) * ai - 1] = scratch[(BLOCK_SIZE >>  4) * bi - 1] - scratch[(BLOCK_SIZE >>  4) * ai - 1];} }
-      if (BLOCK_SIZE >=   32){ if (get_local_id(0) <   16) {scratch[(BLOCK_SIZE >>  5) * bi - 1] += scratch[(BLOCK_SIZE >>  5) * ai - 1]; scratch[(BLOCK_SIZE >>  5) * ai - 1] = scratch[(BLOCK_SIZE >>  5) * bi - 1] - scratch[(BLOCK_SIZE >>  5) * ai - 1];} }
+      if (BLOCK_SIZE >=    4){ if (get_local_id(0) <    2) {scratch[(BLOCK_SIZE >>  2) * bi - 1] += scratch[(BLOCK_SIZE >>  2) * ai - 1]; scratch[(BLOCK_SIZE >>  2) * ai - 1] = scratch[(BLOCK_SIZE >>  2) * bi - 1] - scratch[(BLOCK_SIZE >>  2) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=    8){ if (get_local_id(0) <    4) {scratch[(BLOCK_SIZE >>  3) * bi - 1] += scratch[(BLOCK_SIZE >>  3) * ai - 1]; scratch[(BLOCK_SIZE >>  3) * ai - 1] = scratch[(BLOCK_SIZE >>  3) * bi - 1] - scratch[(BLOCK_SIZE >>  3) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=   16){ if (get_local_id(0) <    8) {scratch[(BLOCK_SIZE >>  4) * bi - 1] += scratch[(BLOCK_SIZE >>  4) * ai - 1]; scratch[(BLOCK_SIZE >>  4) * ai - 1] = scratch[(BLOCK_SIZE >>  4) * bi - 1] - scratch[(BLOCK_SIZE >>  4) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
+      if (BLOCK_SIZE >=   32){ if (get_local_id(0) <   16) {scratch[(BLOCK_SIZE >>  5) * bi - 1] += scratch[(BLOCK_SIZE >>  5) * ai - 1]; scratch[(BLOCK_SIZE >>  5) * ai - 1] = scratch[(BLOCK_SIZE >>  5) * bi - 1] - scratch[(BLOCK_SIZE >>  5) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
       if (BLOCK_SIZE >=   64){ if (get_local_id(0) <   32) {scratch[(BLOCK_SIZE >>  6) * bi - 1] += scratch[(BLOCK_SIZE >>  6) * ai - 1]; scratch[(BLOCK_SIZE >>  6) * ai - 1] = scratch[(BLOCK_SIZE >>  6) * bi - 1] - scratch[(BLOCK_SIZE >>  6) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
       if (BLOCK_SIZE >=  128){ if (get_local_id(0) <   64) {scratch[(BLOCK_SIZE >>  7) * bi - 1] += scratch[(BLOCK_SIZE >>  7) * ai - 1]; scratch[(BLOCK_SIZE >>  7) * ai - 1] = scratch[(BLOCK_SIZE >>  7) * bi - 1] - scratch[(BLOCK_SIZE >>  7) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
       if (BLOCK_SIZE >=  256){ if (get_local_id(0) <  128) {scratch[(BLOCK_SIZE >>  8) * bi - 1] += scratch[(BLOCK_SIZE >>  8) * ai - 1]; scratch[(BLOCK_SIZE >>  8) * ai - 1] = scratch[(BLOCK_SIZE >>  8) * bi - 1] - scratch[(BLOCK_SIZE >>  8) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
       if (BLOCK_SIZE >=  512){ if (get_local_id(0) <  256) {scratch[(BLOCK_SIZE >>  9) * bi - 1] += scratch[(BLOCK_SIZE >>  9) * ai - 1]; scratch[(BLOCK_SIZE >>  9) * ai - 1] = scratch[(BLOCK_SIZE >>  9) * bi - 1] - scratch[(BLOCK_SIZE >>  9) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
       if (BLOCK_SIZE >= 1024){ if (get_local_id(0) <  512) {scratch[(BLOCK_SIZE >> 10) * bi - 1] += scratch[(BLOCK_SIZE >> 10) * ai - 1]; scratch[(BLOCK_SIZE >> 10) * ai - 1] = scratch[(BLOCK_SIZE >> 10) * bi - 1] - scratch[(BLOCK_SIZE >> 10) * ai - 1];} work_group_barrier(CLK_LOCAL_MEM_FENCE); }
           
-      if (get_local_id(0) != BLOCK_SIZE - 1) { scratch[get_local_id(0)] = scratch[get_local_id(0) + 1];} else {scratch[BLOCK_SIZE - 1] = inclusive_scan;} 
+      uint temp_tree = select(inclusive_scan, scratch[get_local_id(0) + 1], get_local_id(0) != BLOCK_SIZE - 1);
+
+      work_group_barrier(CLK_LOCAL_MEM_FENCE);
+
+      scratch[get_local_id(0)] = temp_tree;
+
       break;
     }
   default:
