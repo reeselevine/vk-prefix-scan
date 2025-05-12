@@ -141,6 +141,46 @@ int main(int argc, char* argv[]) {
 		spvCode = 
 		#include "batch_size/prefix-scan8.cinit"
 		;
+	}else if(BATCH_SIZE == 16) {
+		spvCode = 
+		#include "batch_size/prefix-scan16.cinit"
+		;
+	}else if(BATCH_SIZE == 32) {
+		spvCode = 
+		#include "batch_size/prefix-scan32.cinit"
+		;
+	}else if(BATCH_SIZE == 64) {
+		spvCode = 
+		#include "batch_size/prefix-scan64.cinit"
+		;
+	}else if(BATCH_SIZE == 128) {
+		spvCode = 
+		#include "batch_size/prefix-scan128.cinit"
+		;
+	}else if(BATCH_SIZE == 256) {
+		spvCode = 
+		#include "batch_size/prefix-scan256.cinit"
+		;
+	}else if(BATCH_SIZE == 512) {
+		spvCode = 
+		#include "batch_size/prefix-scan512.cinit"
+		;
+	}else if(BATCH_SIZE == 1024) {
+		spvCode = 
+		#include "batch_size/prefix-scan1024.cinit"
+		;
+	}else if(BATCH_SIZE == 2048) {
+		spvCode = 
+		#include "batch_size/prefix-scan2048.cinit"
+		;
+	}else if(BATCH_SIZE == 4096) {
+		spvCode = 
+		#include "batch_size/prefix-scan4096.cinit"
+		;
+	}else if(BATCH_SIZE == 8192) {
+		spvCode = 
+		#include "batch_size/prefix-scan8192.cinit"
+		;
 	}
 
 	// std::vector<uint32_t> spvCode = 

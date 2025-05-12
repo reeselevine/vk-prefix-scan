@@ -1,4 +1,4 @@
-#define BATCH_SIZE 32
+#define BATCH_SIZE 8192
 
 #define FLG_A 1U
 #define FLG_P 2U

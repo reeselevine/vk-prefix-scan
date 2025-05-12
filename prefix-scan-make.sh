@@ -2,7 +2,7 @@
 
 set -e  # Stop script on any error
 
-BATCH_SIZES=(1 2 4 8)
+BATCH_SIZES=(1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192)
 
 for BATCH in "${BATCH_SIZES[@]}"; do
     sed -i "s/#define BATCH_SIZE.*/#define BATCH_SIZE $BATCH/" prefix-scan.cl
