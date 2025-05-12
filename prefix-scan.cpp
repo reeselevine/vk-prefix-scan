@@ -31,15 +31,19 @@ int main(int argc, char* argv[]) {
   bool checkResults = false;
   int c;
   int p = 1;
+  int mem_type = 4;
   int BATCH_SIZE = 4;
   char alg = 'a';
   int alt = 1;
 
-    while ((c = getopt (argc, argv, "vct:w:d:b:p:a:s:")) != -1)
+    while ((c = getopt (argc, argv, "vct:w:d:b:p:a:s:m:")) != -1)
     switch (c)
       {
       case 'a':
         alt = atoi(optarg);
+        break;
+	  case 'm':
+        mem_type = atoi(optarg);
         break;
 	  case 's':
         BATCH_SIZE = atoi(optarg);
@@ -74,13 +78,13 @@ int main(int argc, char* argv[]) {
       default:
         abort ();
       }
-    auto size = numWorkgroups * workgroupSize * BATCH_SIZE * 4;
+    auto size = numWorkgroups * workgroupSize * BATCH_SIZE * mem_type;
 	if (size > 1073741824) {
 		for (int i = 0; i < 100; i++) {
 			std::cout << "OVERFLOW ALERT" << "\n";
 		}
 	}
-	auto sizeBytes = numWorkgroups * workgroupSize * BATCH_SIZE * (sizeof(uint)) * 4;
+	auto sizeBytes = numWorkgroups * workgroupSize * BATCH_SIZE * (sizeof(uint)) * mem_type;
 	// Initialize instance.
 	auto instance = easyvk::Instance(enableValidationLayers);
 	// Get list of available physical devices.
@@ -123,64 +127,110 @@ int main(int argc, char* argv[]) {
 	std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, partitionCtr, debug};
 	// std::vector<easyvk::Buffer> bufs = {in, out, prefixStates, debug};
 
+	std::string dir = "batch_size/prefix-scan" + std::to_string(BATCH_SIZE) + ".cinit";
+
 	std::vector<uint32_t> spvCode;
 
-	if (BATCH_SIZE == 1) {
-		spvCode = 
-		#include "batch_size/prefix-scan1.cinit"
-		;
-	}else if(BATCH_SIZE == 2) {
-		spvCode = 
-		#include "batch_size/prefix-scan2.cinit"
-		;
-	}else if(BATCH_SIZE == 4) {
-		spvCode = 
-		#include "batch_size/prefix-scan4.cinit"
-		;
-	}else if(BATCH_SIZE == 8) {
-		spvCode = 
-		#include "batch_size/prefix-scan8.cinit"
-		;
-	}else if(BATCH_SIZE == 16) {
-		spvCode = 
-		#include "batch_size/prefix-scan16.cinit"
-		;
-	}else if(BATCH_SIZE == 32) {
-		spvCode = 
-		#include "batch_size/prefix-scan32.cinit"
-		;
-	}else if(BATCH_SIZE == 64) {
-		spvCode = 
-		#include "batch_size/prefix-scan64.cinit"
-		;
-	}else if(BATCH_SIZE == 128) {
-		spvCode = 
-		#include "batch_size/prefix-scan128.cinit"
-		;
-	}else if(BATCH_SIZE == 256) {
-		spvCode = 
-		#include "batch_size/prefix-scan256.cinit"
-		;
-	}else if(BATCH_SIZE == 512) {
-		spvCode = 
-		#include "batch_size/prefix-scan512.cinit"
-		;
-	}else if(BATCH_SIZE == 1024) {
-		spvCode = 
-		#include "batch_size/prefix-scan1024.cinit"
-		;
-	}else if(BATCH_SIZE == 2048) {
-		spvCode = 
-		#include "batch_size/prefix-scan2048.cinit"
-		;
-	}else if(BATCH_SIZE == 4096) {
-		spvCode = 
-		#include "batch_size/prefix-scan4096.cinit"
-		;
-	}else if(BATCH_SIZE == 8192) {
-		spvCode = 
-		#include "batch_size/prefix-scan8192.cinit"
-		;
+	if (mem_type == 4) {
+		if (BATCH_SIZE == 1) {
+			spvCode = 
+			#include "batch_size/prefix-scan1_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 2) {
+			spvCode = 
+			#include "batch_size/prefix-scan2_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 4) {
+			spvCode = 
+			#include "batch_size/prefix-scan4_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 8) {
+			spvCode = 
+			#include "batch_size/prefix-scan8_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 16) {
+			spvCode = 
+			#include "batch_size/prefix-scan16_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 32) {
+			spvCode = 
+			#include "batch_size/prefix-scan32_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 64) {
+			spvCode = 
+			#include "batch_size/prefix-scan64_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 128) {
+			spvCode = 
+			#include "batch_size/prefix-scan128_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 256) {
+			spvCode = 
+			#include "batch_size/prefix-scan256_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 512) {
+			spvCode = 
+			#include "batch_size/prefix-scan512_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 1024) {
+			spvCode = 
+			#include "batch_size/prefix-scan1024_uint4.cinit"
+			;
+		}else if(BATCH_SIZE == 2048) {
+			spvCode = 
+			#include "batch_size/prefix-scan2048_uint4.cinit"
+			;
+		}
+	}else if (mem_type == 2){
+		if (BATCH_SIZE == 1) {
+			spvCode = 
+			#include "batch_size/prefix-scan1_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 2) {
+			spvCode = 
+			#include "batch_size/prefix-scan2_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 4) {
+			spvCode = 
+			#include "batch_size/prefix-scan4_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 8) {
+			spvCode = 
+			#include "batch_size/prefix-scan8_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 16) {
+			spvCode = 
+			#include "batch_size/prefix-scan16_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 32) {
+			spvCode = 
+			#include "batch_size/prefix-scan32_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 64) {
+			spvCode = 
+			#include "batch_size/prefix-scan64_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 128) {
+			spvCode = 
+			#include "batch_size/prefix-scan128_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 256) {
+			spvCode = 
+			#include "batch_size/prefix-scan256_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 512) {
+			spvCode = 
+			#include "batch_size/prefix-scan512_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 1024) {
+			spvCode = 
+			#include "batch_size/prefix-scan1024_uint2.cinit"
+			;
+		}else if(BATCH_SIZE == 2048) {
+			spvCode = 
+			#include "batch_size/prefix-scan2048_uint2.cinit"
+			;
+		}
 	}
 
 	// std::vector<uint32_t> spvCode = 

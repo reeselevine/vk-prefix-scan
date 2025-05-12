@@ -1,18 +1,19 @@
-#define BATCH_SIZE 8192
-
+#define U4
+#define BATCH_SIZE 2048
 #define FLG_A 1U
 #define FLG_P 2U
 #define ANTI_MASK 30
+
 #define MASK ~(3 << ANTI_MASK)
 
-uint4 prefix_sum_inclusive(uint4 v) {
-    v.y += v.x;                  // v = ( v.x, v.x+v.y, v.z, v.w )
-    v.z += v.y;                  // v = ( v.x, v.x+v.y, v.x+v.y+v.z, v.w )
-    v.w += v.z;                  // v = ( v.x, v.x+v.y, v.x+v.y+v.z, v.x+v.y+v.z+v.w )
-    return v;
-}
+// uint4 prefix_sum_inclusive(uint4 v) {
+//     v.y += v.x;                  // v = ( v.x, v.x+v.y, v.z, v.w )
+//     v.z += v.y;                  // v = ( v.x, v.x+v.y, v.x+v.y+v.z, v.w )
+//     v.w += v.z;                  // v = ( v.x, v.x+v.y, v.x+v.y+v.z, v.x+v.y+v.z+v.w )
+//     return v;
+// }
 
-inline void prefix_sum_inclusive_batch(uint4 *values) {
+inline void uint4_prefix_sum_inclusive_batch(uint4 *values) {
     // First, prefix scan the first uint4 element
     values[0].y += values[0].x;
     values[0].z += values[0].y;
@@ -30,6 +31,20 @@ inline void prefix_sum_inclusive_batch(uint4 *values) {
     }
 }
 
+
+inline void uint2_prefix_sum_inclusive_batch(uint2 *values) {
+    // First, prefix scan the first uint2 element
+    values[0].y += values[0].x;
+
+    // Then, for remaining elements
+    for (uint i = 1; i < BATCH_SIZE; i++) {
+        // Add last component from previous
+        uint prev = values[i - 1].y;
+
+        values[i].x += prev;
+        values[i].y += values[i].x;
+    }
+}
 
 
 
@@ -61,18 +76,30 @@ __kernel void prefix_scan(
   // each thread works on items indexed on its partition and position in the block
   uint my_id = part_id * get_local_size(0) * BATCH_SIZE + get_local_id(0) * BATCH_SIZE;
 
-  uint4 values[BATCH_SIZE];
-  for (uint i = 0; i < BATCH_SIZE; i++) {
-      values[i] = in[my_id + i];
-  }
-  prefix_sum_inclusive_batch(values);
+  #ifdef U4
+      uint4 values[BATCH_SIZE];
+      for (uint i = 0; i < BATCH_SIZE; i++) {
+        values[i] = in[my_id + i];
+      }
+      uint4_prefix_sum_inclusive_batch(values);
+      scratch[get_local_id(0)] = values[BATCH_SIZE - 1].w;
+  #else
+      uint2 values[BATCH_SIZE];
+      for (uint i = 0; i < BATCH_SIZE; i++) {
+        values[i] = in[my_id + i];
+      }
+      uint2_prefix_sum_inclusive_batch(values);
+      scratch[get_local_id(0)] = values[BATCH_SIZE - 1].y;
+  #endif
+
+
+  
 
   switch (scan_type)
   {
   case 'a':
     {
       // store inclusive thread prefix to local memory so that a block wide prefix can be computed
-      scratch[get_local_id(0)] = values[BATCH_SIZE - 1].w;
       work_group_barrier(CLK_LOCAL_MEM_FENCE);
 
       // perform raking exclusive sum, where only threads in the first subgroup do any work
@@ -138,7 +165,6 @@ __kernel void prefix_scan(
     {
       // load input into shared memory 
       uint BLOCK_SIZE = get_local_size(0);
-      scratch[get_local_id(0)] = values[BATCH_SIZE - 1].w;
       const ushort sg_size = get_sub_group_size();
       
       work_group_barrier(CLK_LOCAL_MEM_FENCE);

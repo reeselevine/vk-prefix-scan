@@ -17,18 +17,18 @@ error_pattern = re.compile(r'debug: (1|0)')
 
 
 
-file_name = "batch-vec-loads-no-branch"
-plot_name = "Vulkan prefix-sum vec loads"
-x_label = "workgroups * threads * batch_size"
+file_name = "all params"
+plot_name = "all params"
+x_label = "workgroups * threads * batch_size * mem_type"
 y_label = "Throughput"
 min_size = 12
-max_size = 26
+max_size = 24
 min_bs = 0
-max_bs = 2
+max_bs = 3
 min_threads = 5
 max_threads = 10
-min_workgroups = 5
-max_workgroups = max_size - min_threads
+min_workgroups = 4
+max_workgroups = max_size - min_threads 
 throughputs_ = [list() for _ in range(10, max_size - 1)]
 
 
@@ -74,7 +74,7 @@ def calculate_statistics(output):
 
 
 def main():
-    run(_blit=False, _device=1, _executable="build/prefix-scan.run", _n=2, _label="Nvidia GTX 4070 any lookback vec loads", _color="red", _warmup=1)
+    run(_blit=False, _device=1, _executable="build/prefix-scan.run", _n=2, _label="Nvidia GTX 4070 all params", _color="red", _warmup=1)
     #run(_blit=True, _device=1, _executable="build/blit.run", _n=2, _p=0, _label="Nvidia GTX 4070 blit", _color="orange", _warmup=2)
     #run(_blit=True, _device=1, _executable="build/blit.run", _n=16, _p=0, _label="blit", _color="blue", _warmup=5)
 
@@ -92,52 +92,53 @@ def run(_blit, _device, _executable, _n, _label, _color, _warmup):
         # start # - input over all params
         print("2 ^ " + str(input_size))
         #for alg in ['a', 'c']:
-        for alg in ['a']:
-            for _p in [0, 1]:
-                for bs in (2**p for p in range(min_bs, max_bs + 1)):
-                    for t in (2**p for p in range(min_threads, max_threads + 1)):
-                        for w in (2**p for p in range(min_workgroups, max_workgroups + 1)):
-                            # end # - input over all params
-                            if bs * t * w == 2 ** input_size:
-                                alt = 1
-                                output = ""
-                                warmup_output = ""
+        for mem_type in [4, 2]:
+            for alg in ['a', 'c']:
+                for _p in [0, 1]:
+                    for bs in (2**p for p in range(min_bs, max_bs + 1)):
+                        for t in (2**p for p in range(min_threads, max_threads + 1)):
+                            for w in (2**p for p in range(min_workgroups, max_workgroups + 1)):
+                                # end # - input over all params
+                                if bs * t * w * mem_type == 2 ** input_size:
+                                    alt = 1
+                                    output = ""
+                                    warmup_output = ""
 
-                                for i in range(_warmup):
-                                    if not _blit:
-                                        command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
-                                        print("Warmup", i, f": -w {w} -t {t} -s '{bs}' -b '{alg}' ")
-                                    else:
-                                        command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
-                                        print("Warmup", i, f": -w {w} -t {t} -s '{bs}' ")
-                                    warmup_output += run_command(command)
-                                    alt += 1
-                            
-                                alt = 1
+                                    for i in range(_warmup):
+                                        if not _blit:
+                                            command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s '{bs}' -m '{mem_type}'"
+                                            print("Warmup", i, f": -w {w} -t {t} -s '{bs}' -b '{alg}' -m '{mem_type}'")
+                                        else:
+                                            command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s '{bs}' -m '{mem_type}'"
+                                            print("Warmup", i, f": -w {w} -t {t} -s '{bs}' -m '{mem_type}'")
+                                        warmup_output += run_command(command)
+                                        alt += 1
+                                
+                                    alt = 1
 
-                                for i in range(_n):
-                                    if not _blit:
-                                        command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s'{bs}'"
-                                        print(f"-w {w} -t {t} -s '{bs}' -b '{alg}' ")
-                                    else:
-                                        command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s'{bs}'"
-                                        print(f"-w {w} -t {t} -s '{bs}' ")
-                                    if sleeps == True:
-                                        time.sleep(2)
-                                    output += run_command(command)
-                                    alt += 1
+                                    for i in range(_n):
+                                        if not _blit:
+                                            command = f"{_executable} -d {_device} -w {w} -t {t} -p {_p} -b '{alg}' -a '{alt}' -s '{bs}' -m '{mem_type}'"
+                                            print(f"-w {w} -t {t} -s '{bs}' -b '{alg}' -m '{mem_type}'")
+                                        else:
+                                            command = f"{_executable} -d {_device} -w {w} -t {t} -a '{alt}' -s '{bs}' -m '{mem_type}'"
+                                            print(f"-w {w} -t {t} -s '{bs}' -m '{mem_type}'")
+                                        if sleeps == True:
+                                            time.sleep(2)
+                                        output += run_command(command)
+                                        alt += 1
 
-                                avg_throughput, var_throughput, error_rate = calculate_statistics(output)
-                                if avg_throughput > max_throughput:
-                                    max_throughput = avg_throughput
-                                    max_var_throughput = var_throughput
-                                    max_error_rate = error_rate
-                                    max_command = command
-                                if error_rate > 0:
-                                    error_commands.append(command)
-                                throughputs_[input_size - min_size].append(avg_throughput)
-                                for i in throughputs_:
-                                    print(i)
+                                    avg_throughput, var_throughput, error_rate = calculate_statistics(output)
+                                    if avg_throughput > max_throughput:
+                                        max_throughput = avg_throughput
+                                        max_var_throughput = var_throughput
+                                        max_error_rate = error_rate
+                                        max_command = command
+                                    if error_rate > 0:
+                                        error_commands.append(command)
+                                    throughputs_[input_size - min_size].append(avg_throughput)
+                                    for i in throughputs_:
+                                        print(i)
 
         best_combinations[input_size - min_size]["throughput"] = round(max_throughput)
         best_combinations[input_size - min_size]["var_throughput"] = round(max_var_throughput)
