@@ -38,23 +38,27 @@ def plot_throughput(data_sets, save_path):
     max_data_points = max(len(data_sets[key]) for key in data_sets)
 
     # Generate input size values starting from 2^10, 2^11, ... to accommodate the largest dataset
-    input_sizes = [2**(10 + i) for i in range(max_data_points)]
+    input_sizes = [2**(14 + i) for i in range(max_data_points)]
 
     # Plotting the data
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
     # Plot each dataset's throughput against the input size
+    colors = ["blueviolet", "mediumorchid", "gray"]
+    #color = "#1f77b4"
+    linestyles = ['-', '-', ':']
+    c = 0
     for label, data in data_sets.items():
         # Ensure each set has the same number of data points by truncating the excess data points
         if len(data) < max_data_points:
             data += [data[-1]] * (max_data_points - len(data))  # Fill in with the last throughput value
 
         # Plot the data for each dataset as a separate line with a label for the legend
-        ax1.plot(input_sizes, data, label=label)
-
-    ax1.set_xlabel('Input Size (2^x)')
+        ax1.plot(input_sizes, data, label=label, marker='.', color=colors[c], linestyle=linestyles[c])
+        c += 1
+    ax1.set_xlabel('Input Size (2^n 32 bit numbers)')
     ax1.set_ylabel('Throughput')
-    ax1.set_title('Throughput vs. Input Size')
+    ax1.set_title('Throughput vs. Input Size (AMD XT 7900)')
 
     # Set the x-axis to be logarithmic with base 2
     ax1.set_xscale('log', base=2)
@@ -68,10 +72,10 @@ def plot_throughput(data_sets, save_path):
     plt.savefig(save_path, format='png')
 
 # File path to the input data
-file_path = 'parse-file.txt'  # Replace with the actual path to your data file
+file_path = 'compare devices.txt'  # Replace with the actual path to your data file
 
 # Path where the plot will be saved
-save_path = 'throughput_plot.png'
+save_path = 'compare_devices.png'
 
 # Parse the data and plot it, saving the plot to a file
 data_sets = parse_data(file_path)
