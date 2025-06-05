@@ -17,12 +17,12 @@ error_pattern = re.compile(r'debug: (1|0)')
 
 
 
-file_name = "test"
-plot_name = "test"
+file_name = "AllParams (integrated)"
+plot_name = "AllParams (integrated)"
 x_label = "workgroups * threads * batch_size * mem_type"
 y_label = "Throughput"
-min_size = 14
-max_size = 16
+min_size = 10
+max_size = 15
 min_bs = 0
 max_bs = 4
 min_threads = 6
@@ -30,7 +30,6 @@ max_threads = 10
 min_workgroups = 5
 max_workgroups = max_size - min_threads 
 throughputs_ = [list() for _ in range(min_size, max_size + 1)]
-throughputs_with_command = [list() for _ in range(min_size, max_size + 1)]
 
 
 def run_command(command):
@@ -74,7 +73,7 @@ def calculate_statistics(output):
 
 
 def main():
-    run(_blit=False, _device=1, _executable="build/prefix-scan.run", _n=1, _label="AMD XT 7900 all params", _color="red", _warmup=0)
+    run(_blit=False, _device=0, _executable="build/prefix-scan.run", _n=2, _label="AMD Radeon Graphics exhaustive", _color="red", _warmup=1)
     #run(_blit=True, _device=1, _executable="build/blit.run", _n=2, _p=0, _label="Nvidia GTX 4070 blit", _color="orange", _warmup=2)
     #run(_blit=True, _device=1, _executable="build/blit.run", _n=16, _p=0, _label="blit", _color="blue", _warmup=5)
 
@@ -92,7 +91,10 @@ def run(_blit, _device, _executable, _n, _label, _color, _warmup):
         # start # - input over all params
         print("2 ^ " + str(input_size))
         #for alg in ['a', 'c']:
-        throughputs_with_command.append("(" + str(input_size) + ")")
+        with open(file_name + ' commands.txt', 'a') as output:
+            output.write("(" + str(input_size) + ")\n")
+        with open(file_name + ' throughputs.txt', 'a') as output:
+            output.write("\n(" + str(input_size) + ")")
         for mem_type in [4, 2]:
             for alg in ['a', 'c']:
                 for _p in [0, 1]:
@@ -130,7 +132,6 @@ def run(_blit, _device, _executable, _n, _label, _color, _warmup):
                                         alt += 1
 
                                     avg_throughput, var_throughput, error_rate = calculate_statistics(output)
-                                    throughputs_with_command.append(str(avg_throughput) + "--" + command)
                                     if avg_throughput > max_throughput:
                                         max_throughput = avg_throughput
                                         max_var_throughput = var_throughput
@@ -139,6 +140,11 @@ def run(_blit, _device, _executable, _n, _label, _color, _warmup):
                                     if error_rate > 0:
                                         error_commands.append(command)
                                     throughputs_[input_size - min_size].append(avg_throughput)
+                                    with open(file_name + ' throughputs.txt', 'a') as output:
+                                        output.write(str(avg_throughput) + " ")
+                                    with open(file_name + ' commands.txt', 'a') as output:
+                                        output.write(str(avg_throughput) + "--" + command + "\n")
+
                                     for i in throughputs_:
                                         print(i)
 
@@ -165,13 +171,6 @@ def run(_blit, _device, _executable, _n, _label, _color, _warmup):
         for entry in best_combinations:
             output.write(str(entry) + "\n")
         output.write("\n\n")
-
-    with open(file_name + ' commands.txt', 'a') as output:
-        output.write(_label + "\n\n")
-        for entry in throughputs_with_command:
-            output.write(str(entry) + "\n")
-        output.write("\n\n")
-
 
 main()
 
