@@ -317,6 +317,8 @@ for input_size in pivot.index:
     configs = top3_per_input[top3_per_input['input_size'] == input_size]
     # Build annotation string for all three configs at this input size
     annotations = []
+    m = 0
+    count = 0
     for _, row in configs.iterrows():
         # Customize this summary as you like, here showing w, t, b
         #annotations.append(f"(w={row['w']}, t={row['t']}, b={row['b']})")
@@ -324,7 +326,15 @@ for input_size in pivot.index:
         if row['b'] == "a":
             annotations.append(f"Raking")
         else:
-            annotations.append(f"B1990")
+            annotations.append(f"Blelloch")
+            m += 1
+
+        count += 1
+    percentage = 0 if m == 0 else m / n
+    annotations.insert(0, f".")    
+    #annotations.append(f".")
+    annotations.insert(0, f"BL:{100 * percentage}%")
+    annotations = annotations[:4]
     annotation_text = "\n".join(annotations)
     plt.annotate(
         annotation_text,
