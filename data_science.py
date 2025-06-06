@@ -49,7 +49,7 @@ for line in lines:
 
 # Create DataFrame
 df = pd.DataFrame(results)
-print(df)
+#print(df)
 
 
 # # Group by workgroup size
@@ -69,8 +69,8 @@ print(df)
 # plt.savefig(output_file + ".png")
 
 
-# Top 8 fixed configs
-################################
+#Top 8 fixed configs
+###############################
 
 # # fixed params columns
 # fixed_cols = ['p', 'b', 'a', 's', 'm']
@@ -96,14 +96,17 @@ print(df)
 
 # # Storage for both sets
 # lines = []
-# i = 0
-# for rank, fixed_row in top_fixed_params.iterrows():
+
+# for i, (_, fixed_row) in enumerate(top_fixed_params.iterrows()):
 #     # Get rows in df with matching fixed params
 #     mask = pd.Series(True, index=df.index)
 #     for col in fixed_cols:
 #         mask &= df[col] == fixed_row[col]
 
 #     filtered_df = df[mask]
+
+#     print(top_fixed_params[['throughput'] + fixed_cols])
+
 
 #     # Find max throughput per input size (best w,t for each input size)
 #     best_per_input = filtered_df.loc[
@@ -112,7 +115,7 @@ print(df)
 
 #     label = f"Rank {i + 1}: " + ", ".join(f"{k}={fixed_row[k]}" for k in fixed_cols)
 #     lines.append((best_per_input, label))
-#     i += 1
+    
 
 # # 4. Plot both
 # plt.figure(figsize=(10,6))
@@ -191,7 +194,7 @@ print(df)
 
 
 # Best avg reduction per workgroup size
-################################
+###############################
 
 # Find best-performing -b for each w
 # Filter only b values of interest
@@ -229,14 +232,68 @@ print(df)
 # plt.grid(True, axis='y')
 # plt.tight_layout()
 
-#################################3
 
-# For each input_size, get top 3 configs by throughput
+#For each input_size, get top 3 configs by throughput
+################################3
+
+# #For each input_size, get top 3 configs by throughput
+# top3_per_input = (
+#     df
+#     .sort_values(['input_size', 'throughput'], ascending=[True, False])
+#     .groupby('input_size')
+#     .head(8)
+#     .copy()
+# )
+
+# # Assign rank per input size (1=best)
+# top3_per_input['rank'] = top3_per_input.groupby('input_size')['throughput'].rank(ascending=False, method='first')
+
+# # Pivot so each rank is a separate line, index=input_size, columns=rank, values=throughput
+# pivot = top3_per_input.pivot(index='input_size', columns='rank', values='throughput')
+
+# plt.figure(figsize=(12, 7))
+
+# # Plot lines for rank 1, 2, 3
+# for rank in [1, 2, 3]:
+#     if rank in pivot.columns:
+#         plt.plot(pivot.index, pivot[rank], marker='o', label=f'Top {int(rank)} config')
+
+# # Annotate each input size with all three configs' summaries
+# for input_size in pivot.index:
+#     configs = top3_per_input[top3_per_input['input_size'] == input_size]
+#     # Build annotation string for all three configs at this input size
+#     annotations = []
+#     for _, row in configs.iterrows():
+#         # Customize this summary as you like, here showing w, t, b
+#         #annotations.append(f"(w={row['w']}, t={row['t']}, b={row['b']})")
+#         annotations.append(f"b={row['b']})")
+    
+#     annotation_text = "\n".join(annotations)
+#     plt.annotate(
+#         annotation_text,
+#         (input_size, pivot.loc[input_size, 1]),
+#         textcoords="offset points",
+#         xytext=(5,5),
+#         ha='left',
+#         fontsize=8,
+#         bbox=dict(boxstyle="round,pad=0.3", fc="yellow", alpha=0.3)
+#     )
+
+# plt.title('Top 3 Configurations Throughput vs Input Size')
+# plt.xlabel('Input Size')
+# plt.ylabel('Throughput')
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
+
+###############
+n = 8
+#For each input_size, get top 3 configs by throughput
 top3_per_input = (
     df
     .sort_values(['input_size', 'throughput'], ascending=[True, False])
     .groupby('input_size')
-    .head(3)
+    .head(n)
     .copy()
 )
 
@@ -246,10 +303,12 @@ top3_per_input['rank'] = top3_per_input.groupby('input_size')['throughput'].rank
 # Pivot so each rank is a separate line, index=input_size, columns=rank, values=throughput
 pivot = top3_per_input.pivot(index='input_size', columns='rank', values='throughput')
 
+#print(pivot)
+
 plt.figure(figsize=(12, 7))
 
-# Plot lines for rank 1, 2, 3
-for rank in [1, 2, 3]:
+# Plot lines for rank 1 -> n
+for rank in range(1, n + 1):
     if rank in pivot.columns:
         plt.plot(pivot.index, pivot[rank], marker='o', label=f'Top {int(rank)} config')
 
@@ -260,7 +319,12 @@ for input_size in pivot.index:
     annotations = []
     for _, row in configs.iterrows():
         # Customize this summary as you like, here showing w, t, b
-        annotations.append(f"(w={row['w']}, t={row['t']}, b={row['b']})")
+        #annotations.append(f"(w={row['w']}, t={row['t']}, b={row['b']})")
+        #annotations.append(f"b={row['b']})")
+        if row['b'] == "a":
+            annotations.append(f"Raking")
+        else:
+            annotations.append(f"B1990")
     annotation_text = "\n".join(annotations)
     plt.annotate(
         annotation_text,
@@ -272,12 +336,13 @@ for input_size in pivot.index:
         bbox=dict(boxstyle="round,pad=0.3", fc="yellow", alpha=0.3)
     )
 
-plt.title('Top 3 Configurations Throughput vs Input Size')
-plt.xlabel('Input Size')
-plt.ylabel('Throughput')
+plt.title('Top 3 Configurations Throughput vs Input Size', fontsize=20)
+plt.xlabel('Input Size', fontsize=20)
+plt.ylabel('Throughput', fontsize=20)
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
+
 
 
 plt.savefig("stink local_scan.png")
