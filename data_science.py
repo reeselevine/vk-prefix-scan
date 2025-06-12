@@ -561,17 +561,20 @@ def compute_metrics(group_line):
     abs_diff = np.abs(group_line.values - ideal_line.values).mean()
     sqr_diff = ((group_line.values - ideal_line.values) ** 2).mean()
     area = np.trapz(np.abs(group_line.values - ideal_line.values), x=input_sizes)
-    return abs_diff, sqr_diff, area
+    total_throughput = group_line.values.sum()
+    return abs_diff, sqr_diff, area, total_throughput
 
 scores = []
 for key, line in grouped_lines.items():
-    abs_diff, sqr_diff, area = compute_metrics(line)
+    abs_diff, sqr_diff, area, total_tp = compute_metrics(line)
     scores.append({
         "key": key,
         "line": line,
         "abs": abs_diff,
         "sqr": sqr_diff,
-        "area": area
+        "area": area,
+        "sum_throughput": total_tp
+
     })
 
 scores_df = pd.DataFrame(scores)
@@ -580,18 +583,22 @@ scores_df = pd.DataFrame(scores)
 best_abs = scores_df.loc[scores_df["abs"].idxmin()]
 best_sqr = scores_df.loc[scores_df["sqr"].idxmin()]
 best_area = scores_df.loc[scores_df["area"].idxmin()]
+best_sum = scores_df.loc[scores_df["sum_throughput"].idxmax()]
 
 # --- Step 5: Plot ---
 plt.figure(figsize=(10, 6))
+plt.axhline(y=800, color='r', linestyle='--', linewidth=2, label='Theoretical Bandwidth = 800 GB/s')
 plt.plot(input_sizes, ideal_line.values, label="Ideal Line", color="black", linewidth=2)
 
-plt.plot(input_sizes, best_abs["line"].values, label=f"Best Abs {best_abs['key']}", linestyle='--')
-plt.plot(input_sizes, best_sqr["line"].values, label=f"Best Sqr {best_sqr['key']}", linestyle='-.')
-plt.plot(input_sizes, best_area["line"].values, label=f"Best Area {best_area['key']}", linestyle=':')
+plt.plot(input_sizes, best_abs["line"].values, label=f"Best Abs", linestyle='--')
+plt.plot(input_sizes, best_sqr["line"].values, label=f"Best Sqr", linestyle='-.')
+plt.plot(input_sizes, best_sum["line"].values, label=f"Best Sum", linestyle=':')
 
-plt.xlabel("Input Size")
-plt.ylabel("Throughput")
-plt.title("Best Group Lines vs Ideal Line")
+#plt.plot(input_sizes, best_area["line"].values, label=f"Best Area", linestyle=':')
+
+plt.xlabel("Input Size", fontsize=16)
+plt.ylabel("Throughput", fontsize=16)
+plt.title("Best Group Lines vs Ideal Line", fontsize=16)
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
